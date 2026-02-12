@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import Image from "next/image";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
+import { Mic, Shield, Lock, Zap } from "lucide-react";
 
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
@@ -46,11 +46,42 @@ export default function Home() {
         </button>
 
         {/* Bento Grid Teaser */}
-        <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 w-full opacity-50 grayscale hover:grayscale-0 transition-all duration-700">
-             <div className="bg-zinc-900/50 h-32 rounded-2xl border border-zinc-800/50"></div>
-             <div className="bg-zinc-900/50 h-32 rounded-2xl border border-zinc-800/50 translate-y-4"></div>
-             <div className="bg-zinc-900/50 h-32 rounded-2xl border border-zinc-800/50"></div>
-             <div className="bg-zinc-900/50 h-32 rounded-2xl border border-zinc-800/50 translate-y-8"></div>
+        <div className="mt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-7xl opacity-0 animate-[fadeIn_1s_ease-out_0.5s_forwards] px-4">
+             <div className="group bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 rounded-3xl hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-500 hover:-translate-y-1 cursor-default relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity opacity-0 group-hover:opacity-100" />
+                <div className="w-14 h-14 bg-zinc-800/50 rounded-2xl flex items-center justify-center mb-6 border border-zinc-700/50 group-hover:border-zinc-600 transition-colors">
+                  <Lock className="text-zinc-400 group-hover:text-white transition-colors" size={24} />
+                </div>
+                <h3 className="text-xl font-medium text-white mb-3">Exclusive Access</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed font-light">Manually verified community ensures high-quality connections and privacy.</p>
+             </div>
+             
+             <div className="group bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 rounded-3xl hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-500 hover:-translate-y-1 cursor-default relative overflow-hidden lg:translate-y-8">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity opacity-0 group-hover:opacity-100" />
+                <div className="w-14 h-14 bg-zinc-800/50 rounded-2xl flex items-center justify-center mb-6 border border-zinc-700/50 group-hover:border-zinc-600 transition-colors">
+                  <Mic className="text-zinc-400 group-hover:text-white transition-colors" size={24} />
+                </div>
+                <h3 className="text-xl font-medium text-white mb-3">Crystal Voice</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed font-light">High-fidelity audio streaming for conversations that feel like you&apos;re in the same room.</p>
+             </div>
+
+             <div className="group bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 rounded-3xl hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-500 hover:-translate-y-1 cursor-default relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity opacity-0 group-hover:opacity-100" />
+                <div className="w-14 h-14 bg-zinc-800/50 rounded-2xl flex items-center justify-center mb-6 border border-zinc-700/50 group-hover:border-zinc-600 transition-colors">
+                   <Zap className="text-zinc-400 group-hover:text-white transition-colors" size={24} />
+                </div>
+                <h3 className="text-xl font-medium text-white mb-3">Instant Connect</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed font-light">Real-time presence and instant serendipitous connections with online members.</p>
+             </div>
+
+             <div className="group bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 rounded-3xl hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-500 hover:-translate-y-1 cursor-default relative overflow-hidden lg:translate-y-8">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity opacity-0 group-hover:opacity-100" />
+                <div className="w-14 h-14 bg-zinc-800/50 rounded-2xl flex items-center justify-center mb-6 border border-zinc-700/50 group-hover:border-zinc-600 transition-colors">
+                   <Shield className="text-zinc-400 group-hover:text-white transition-colors" size={24} />
+                </div>
+                <h3 className="text-xl font-medium text-white mb-3">Private by Default</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed font-light">Your data remains yours. End-to-end encrypted signals for total peace of mind.</p>
+             </div>
         </div>
 
       </div>

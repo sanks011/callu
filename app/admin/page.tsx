@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Check, X, Loader2, Ban, Trash2 } from "lucide-react";
+import { Check, Loader2, Ban, Trash2, Users, Clock, Activity } from "lucide-react";
 
 interface User {
   _id: string;
@@ -83,7 +83,50 @@ export default function AdminPage() {
   const displayUsers = activeTab === 'pending' ? pendingUsers : approvedUsers;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      
+      {/* Admin Stats Bento */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex items-start justify-between relative overflow-hidden group hover:border-zinc-700 transition-colors">
+            <div className="z-10">
+               <p className="text-zinc-500 text-sm font-medium mb-1">Total Members</p>
+               <h3 className="text-4xl font-light text-white">{approvedUsers.length}</h3>
+            </div>
+            <div className="w-12 h-12 bg-emerald-900/20 rounded-2xl flex items-center justify-center text-emerald-500 z-10">
+               <Users size={24} />
+            </div>
+            <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
+         </div>
+         
+         <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex items-start justify-between relative overflow-hidden group hover:border-zinc-700 transition-colors">
+            <div className="z-10">
+               <p className="text-zinc-500 text-sm font-medium mb-1">Pending Requests</p>
+               <h3 className="text-4xl font-light text-white">{pendingUsers.length}</h3>
+            </div>
+            <div className="w-12 h-12 bg-amber-900/20 rounded-2xl flex items-center justify-center text-amber-500 z-10">
+               <Clock size={24} />
+            </div>
+             <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
+         </div>
+
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex items-start justify-between relative overflow-hidden group hover:border-zinc-700 transition-colors">
+            <div className="z-10">
+               <p className="text-zinc-500 text-sm font-medium mb-1">System Status</p>
+               <h3 className="text-2xl font-light text-white flex items-center gap-2">
+                 <span className="relative flex h-3 w-3">
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                 </span>
+                 Operational
+               </h3>
+            </div>
+            <div className="w-12 h-12 bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-500 z-10">
+               <Activity size={24} />
+            </div>
+             <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
+         </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-light">User Management</h2>
         <div className="flex gap-2 bg-zinc-900 p-1 rounded-lg">
