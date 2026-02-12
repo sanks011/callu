@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { X, ArrowRight, Loader2 } from "lucide-react";
+import { X, ArrowRight, Loader2, ShieldCheck, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
@@ -34,15 +34,16 @@ export default function ApplyModal({ onClose }: { onClose: () => void }) {
 
   if (success) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-md text-center">
-                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <ArrowRight />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-zinc-950/90 border border-zinc-800/50 p-10 rounded-[2rem] max-w-md text-center backdrop-blur-2xl shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] -mr-16 -mt-16 pointer-events-none" />
+                <div className="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                    <ShieldCheck size={32} />
                 </div>
-                <h3 className="text-2xl text-white font-serif mb-2">Application Received</h3>
-                <p className="text-zinc-400 mb-6">We will review your profile. You will be notified via email.</p>
-                <button onClick={onClose} className="bg-white text-black px-8 py-3 rounded-full font-medium hover:bg-zinc-200 cursor-pointer">
-                    Close
+                <h3 className="text-3xl text-white font-playfair italic mb-3">Application Received</h3>
+                <p className="text-zinc-400 mb-8 font-dm leading-relaxed">Your application has been logged in our secure node. We manually review every profile to ensure community quality. Expect an encrypted email soon.</p>
+                <button onClick={onClose} className="bg-white text-black px-10 py-3 rounded-full font-medium hover:scale-105 transition-all text-sm uppercase tracking-wide cursor-pointer shadow-lg hover:shadow-white/20">
+                    Return to Home
                 </button>
             </div>
         </div>
@@ -50,56 +51,69 @@ export default function ApplyModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-3xl overflow-hidden relative">
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white cursor-pointer">
-          <X size={20} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div className="w-full max-w-lg bg-zinc-950/80 border border-zinc-800/50 rounded-[2rem] overflow-hidden relative backdrop-blur-2xl shadow-2xl">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50" />
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-emerald-900/10 rounded-full blur-[80px] -mr-20 -mb-20 pointer-events-none" />
+        
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 text-zinc-500 hover:text-white transition-colors cursor-pointer z-10 bg-zinc-900/50 rounded-full hover:bg-zinc-800">
+          <X size={18} />
         </button>
 
-        <div className="p-8">
-            <h2 className="text-3xl font-light text-white mb-2">Apply to Join</h2>
-            <p className="text-zinc-500 mb-8">Access is exclusive and manually approved.</p>
+        <div className="p-8 sm:p-10">
+            <div className="flex items-center gap-3 mb-2">
+                <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-emerald-500 text-xs font-bold uppercase tracking-widest">Open Registration</span>
+            </div>
+            <h2 className="text-4xl font-medium text-white mb-2 font-playfair italic">Apply to Join</h2>
+            <p className="text-zinc-500 mb-8 font-dm text-sm">Access is exclusive and manually approved. Join the top 1%.</p>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Full Name</label>
+                    <label className="block text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider ml-1">Identity</label>
                     <input 
                         required
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                        placeholder="John Doe"
+                        className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
+                        placeholder="Full Name"
                         value={formData.name}
                         onChange={e => setFormData({...formData, name: e.target.value})}
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Mobile</label>
-                    <input 
-                        required
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                        placeholder="+1 555 000 0000"
-                        value={formData.mobile}
-                        onChange={e => setFormData({...formData, mobile: e.target.value})}
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Email</label>
-                    <input 
-                        required
-                        type="email"
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                        placeholder="john@example.com"
-                        value={formData.email}
-                        onChange={e => setFormData({...formData, email: e.target.value})}
-                    />
+                    <label className="block text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider ml-1">Contact Signal</label>
+                    <div className="grid grid-cols-2 gap-4">
+                        <input 
+                            required
+                            type="email"
+                            className="col-span-2 sm:col-span-1 w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
+                            placeholder="Email Address"
+                            value={formData.email}
+                            onChange={e => setFormData({...formData, email: e.target.value})}
+                        />
+                        <input 
+                            required
+                            className="col-span-2 sm:col-span-1 w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
+                            placeholder="Mobile Number"
+                            value={formData.mobile}
+                            onChange={e => setFormData({...formData, mobile: e.target.value})}
+                        />
+                    </div>
                 </div>
 
-                <button 
-                    disabled={loading}
-                    type="submit" 
-                    className="w-full bg-white text-black font-medium text-lg py-4 rounded-xl hover:bg-zinc-200 transition-all mt-4 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                    {loading ? <Loader2 className="animate-spin" /> : "Submit Application"}
-                </button>
+                <div className="pt-2">
+                    <button 
+                        disabled={loading}
+                        type="submit" 
+                        className="group w-full bg-gradient-to-b from-white to-zinc-200 text-black font-bold text-lg py-4 rounded-xl hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
+                    >
+                        {loading ? <Loader2 className="animate-spin" /> : "Initiate Application"}
+                        {!loading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
+                    </button>
+                    <p className="text-center text-[10px] text-zinc-600 mt-4 font-mono uppercase">Encrypted • Secure • Private</p>
+                </div>
             </form>
         </div>
       </div>
@@ -130,23 +144,32 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-8 relative">
-            <button onClick={onClose} className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white cursor-pointer">
-              <X size={20} />
-            </button>
-            <h2 className="text-2xl font-light text-white mb-6">{isAdminMode ? "Admin Login" : "Member Login"}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800/80 rounded-[2rem] p-8 sm:p-10 relative backdrop-blur-3xl shadow-2xl overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-zinc-800/20 rounded-full blur-[60px] -mr-10 -mt-10 pointer-events-none" />
             
-            <div className="flex gap-2 mb-6">
+            <button onClick={onClose} className="absolute top-5 right-5 p-2 text-zinc-500 hover:text-white transition-colors cursor-pointer bg-zinc-900/50 rounded-full hover:bg-zinc-800 z-10">
+              <X size={18} />
+            </button>
+            
+            <div className="mb-8">
+                <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center border border-zinc-800 mb-4 shadow-inner">
+                    <Lock size={20} className="text-white" />
+                </div>
+                <h2 className="text-3xl font-medium text-white font-playfair italic">{isAdminMode ? "Admin Portal" : "Member Access"}</h2>
+                <p className="text-zinc-500 text-sm mt-1 font-dm">Authenticate to enter the private network.</p>
+            </div>
+            
+            <div className="flex p-1 bg-zinc-900/80 rounded-xl mb-8 border border-zinc-800/50">
                 <button 
                     onClick={() => setIsAdminMode(false)}
-                    className={`flex-1 py-2 rounded-lg text-sm transition-colors cursor-pointer ${!isAdminMode ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300 cursor-pointer ${!isAdminMode ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
                     Member
                 </button>
                 <button 
                     onClick={() => setIsAdminMode(true)}
-                    className={`flex-1 py-2 rounded-lg text-sm transition-colors cursor-pointer ${isAdminMode ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300 cursor-pointer ${isAdminMode ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
                     Admin
                 </button>
@@ -155,50 +178,53 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
             <form onSubmit={handleLogin} className="space-y-4">
                 {isAdminMode ? (
                     <>
-                        <div>
-                            <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Admin ID</label>
+                        <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                             <input 
                                 required
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                                placeholder="Enter admin ID"
+                                className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm"
+                                placeholder="Admin Identification"
                                 value={adminId}
                                 onChange={e => setAdminId(e.target.value)}
                             />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Password</label>
                             <input 
                                 required
                                 type="password"
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                                placeholder="Enter password"
+                                className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm font-bold tracking-widest"
+                                placeholder="••••••••"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                             />
                         </div>
                     </>
                 ) : (
-                    <div>
-                        <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">Email</label>
+                    <div className="animate-in slide-in-from-left-4 duration-300">
                         <input 
                             required
                             type="email"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-white transition-colors"
-                            placeholder="john@example.com"
+                            className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm"
+                            placeholder="access@member.com"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                         />
+                         <div className="mt-4 p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/50 flex items-start gap-3">
+                            <div className="h-5 w-5 rounded-full border border-zinc-700 flex items-center justify-center mt-0.5 shrink-0">
+                                <div className="h-2.5 w-2.5 bg-zinc-600 rounded-full"></div>
+                            </div>
+                            <p className="text-xs text-zinc-500 leading-relaxed font-dm">
+                                By continuing, you agree to our private protocols. Connection is end-to-end encrypted.
+                            </p>
+                        </div>
                     </div>
                 )}
                  <button 
                     disabled={loading}
                     type="submit" 
-                    className="w-full bg-zinc-800 text-white font-medium text-lg py-4 rounded-xl hover:bg-zinc-700 transition-all mt-4 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-white text-black font-bold text-lg py-4 rounded-xl hover:bg-zinc-200 transition-all mt-6 flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
                 >
-                    {loading ? <Loader2 className="animate-spin" /> : "Enter"}
+                    {loading ? <Loader2 className="animate-spin" /> : "Establish Connection"}
                 </button>
             </form>
           </div>
         </div>
-    )
+    );
 }
