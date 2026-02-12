@@ -27,8 +27,12 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "CallU",
-  description: "Exclusive Community",
+  title: "CALLU - Exclusive Community",
+  description: "A private space for professionals, creators, and visionaries. Connect through voice, video, and serendipity.",
+  icons: {
+    icon: '/icon',
+    apple: '/apple-icon',
+  },
 };
 
 export default function RootLayout({
