@@ -50,12 +50,19 @@ export default function CallManager() {
   const [isMicOn, setIsMicOn] = useState(true);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [ringtoneMuted, setRingtoneMuted] = useState(false);
+  const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
+  const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
 
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
   const connectionRef = useRef<RTCPeerConnection | null>(null);
   const incomingRingtone = useRef<HTMLAudioElement | null>(null);
   const outgoingRingtone = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const remoteAnalyserRef = useRef<AnalyserNode | null>(null);
+  const localSpeakRaf = useRef<number | null>(null);
+  const remoteSpeakRaf = useRef<number | null>(null);
 
   // ICE candidate buffer - stores candidates that arrive before peer is ready
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
@@ -88,6 +95,55 @@ export default function CallManager() {
     audio.currentTime = 0;
   };
 
+  const ensureAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
+  const startSpeakingDetector = (
+    stream: MediaStream,
+    setSpeaking: (value: boolean) => void,
+    analyserRef: React.MutableRefObject<AnalyserNode | null>,
+    rafRef: React.MutableRefObject<number | null>
+  ) => {
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+
+    const source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    analyserRef.current = analyser;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    let lastSpeaking = false;
+
+    const tick = () => {
+      analyser.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+      const speaking = average > 15;
+
+      if (speaking !== lastSpeaking) {
+        lastSpeaking = speaking;
+        setSpeaking(speaking);
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+    }
+    tick();
+  };
+
   // ─── Unlock audio on first-ever user interaction ─────────────
   useEffect(() => {
     const unlock = () => {
@@ -100,6 +156,10 @@ export default function CallManager() {
         ctx.close();
         console.log("🔓 Audio unlocked by user interaction");
       });
+
+      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+        audioContextRef.current.resume();
+      }
 
       // Unmute any playing-but-muted ringtones
       if (incomingRingtone.current && !incomingRingtone.current.paused && incomingRingtone.current.muted) {
@@ -177,8 +237,45 @@ export default function CallManager() {
     setIsInCall(false);
     setIsMicOn(true);
     setAudioBlocked(false);
+    setIsLocalSpeaking(false);
+    setIsRemoteSpeaking(false);
+
+    if (localSpeakRaf.current) cancelAnimationFrame(localSpeakRaf.current);
+    if (remoteSpeakRaf.current) cancelAnimationFrame(remoteSpeakRaf.current);
+    localSpeakRaf.current = null;
+    remoteSpeakRaf.current = null;
+    localAnalyserRef.current = null;
+    remoteAnalyserRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
 
     socket?.off("call-answered");
+  };
+
+  const cancelOutgoingAttempt = () => {
+    stopRingtone(outgoingRingtone.current);
+
+    if (connectionRef.current) {
+      connectionRef.current.close();
+      connectionRef.current = null;
+    }
+
+    const currentStream = streamRef.current;
+    if (currentStream) {
+      currentStream.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setStream(null);
+    }
+
+    if (myVideo.current) myVideo.current.srcObject = null;
+    if (userVideo.current) userVideo.current.srcObject = null;
+
+    iceCandidateBuffer.current = [];
+    setOutgoingCallData(null);
+    setCallAccepted(false);
+    setIsMicOn(true);
   };
 
   // ─── End call (notify other party + cleanup) ─────────────────
@@ -230,6 +327,17 @@ export default function CallManager() {
     if (!socket) return;
 
     socket.on("call-made", (data: { from: string; name: string; avatar?: string; signal: RTCSessionDescriptionInit }) => {
+      const sameUserAsOutgoing = outgoingCallData?.userId === data.from;
+
+      if (callAccepted) {
+        socket.emit("end-call", { to: data.from, from: user?._id });
+        return;
+      }
+
+      if (sameUserAsOutgoing) {
+        cancelOutgoingAttempt();
+      }
+
       setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
       setIsInCall(true);
       iceCandidateBuffer.current = [];
@@ -289,6 +397,8 @@ export default function CallManager() {
         console.error(`❌ [${role}] Remote audio blocked:`, err.message);
         setAudioBlocked(true);
       });
+
+    startSpeakingDetector(event.streams[0], setIsRemoteSpeaking, remoteAnalyserRef, remoteSpeakRaf);
   };
 
   // ─── Set up peer connection state monitors ───────────────────
@@ -332,6 +442,8 @@ export default function CallManager() {
       streamRef.current = currentStream;
       if (myVideo.current) myVideo.current.srcObject = currentStream;
       console.log("[CALLER] Got local stream");
+
+      startSpeakingDetector(currentStream, setIsLocalSpeaking, localAnalyserRef, localSpeakRaf);
 
       const peer = new RTCPeerConnection(ICE_CONFIG);
       connectionRef.current = peer;
@@ -420,6 +532,8 @@ export default function CallManager() {
       if (myVideo.current) myVideo.current.srcObject = currentStream;
       console.log("[ANSWERER] Got local stream");
 
+      startSpeakingDetector(currentStream, setIsLocalSpeaking, localAnalyserRef, localSpeakRaf);
+
       const peer = new RTCPeerConnection(ICE_CONFIG);
       connectionRef.current = peer;
 
@@ -497,15 +611,19 @@ export default function CallManager() {
         })
         .catch((err) => console.error("❌ Still blocked:", err));
     }
+
+    if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
   };
 
   // ─── Trigger outgoing call ───────────────────────────────────
   useEffect(() => {
-    if (outgoingCallData && !callAccepted) {
+    if (outgoingCallData && !callAccepted && !incomingCall) {
       startCall(outgoingCallData.userId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outgoingCallData]);
+  }, [outgoingCallData, incomingCall]);
 
   // ─── RENDER ──────────────────────────────────────────────────
   if (!incomingCall && !outgoingCallData) return null;
@@ -608,6 +726,29 @@ export default function CallManager() {
             <div className="flex items-center gap-2 mb-8">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               <span className="text-sm text-emerald-400">Connected</span>
+            </div>
+
+            <div className="flex items-center gap-3 mb-8">
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isLocalSpeaking ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-400"}`}>
+                <span className="text-[11px] uppercase tracking-widest">You</span>
+                {isLocalSpeaking && (
+                  <div className="flex items-center gap-0.5">
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
+                  </div>
+                )}
+              </div>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isRemoteSpeaking ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-400"}`}>
+                <span className="text-[11px] uppercase tracking-widest">Them</span>
+                {isRemoteSpeaking && (
+                  <div className="flex items-center gap-0.5">
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Call Controls */}

@@ -705,8 +705,9 @@ export default function RoomVoiceChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="relative min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-8 font-dm overflow-hidden">
+      <div className="room-ambient" aria-hidden="true"></div>
+      <div className="relative max-w-7xl mx-auto">
         {/* Room Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -739,7 +740,7 @@ export default function RoomVoiceChatPage() {
           {participants.map((participant) => (
             <div
               key={participant.userId}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center justify-center hover:border-zinc-700 transition-all relative"
+              className="group relative rounded-3xl border border-zinc-800/80 bg-zinc-900/70 p-6 flex flex-col items-center justify-center transition-all shadow-[0_12px_32px_rgba(0,0,0,0.35)] hover:border-zinc-700/80 hover:shadow-[0_16px_44px_rgba(0,0,0,0.45)] room-card-float"
             >
               {/* Speaking Indicator Pulse */}
               {participant.isSpeaking && (
@@ -751,7 +752,7 @@ export default function RoomVoiceChatPage() {
               
               <div className="relative">
                 <div
-                  className="w-24 h-24 rounded-full mb-4 flex items-center justify-center overflow-hidden transition-all relative"
+                  className="w-24 h-24 rounded-full mb-4 flex items-center justify-center overflow-hidden transition-all relative ring-1 ring-zinc-800/80"
                   style={{
                     backgroundColor: participant.color || "#27272a",
                     boxShadow: participant.isSpeaking 
@@ -772,9 +773,18 @@ export default function RoomVoiceChatPage() {
                   )}
                 </div>
                 
+              </div>
+
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-white font-semibold text-center truncate max-w-full tracking-tight">
+                  {participant.name}
+                </p>
+                {participant.userId === user?._id && (
+                  <span className="text-[11px] uppercase tracking-widest text-emerald-400">You</span>
+                )}
                 {/* Soundwave Animation */}
                 {participant.isSpeaking && (
-                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5">
+                  <div className="mt-1 flex items-center gap-0.5">
                     <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '3px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0s' }}></div>
                     <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '5px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.1s' }}></div>
                     <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '7px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.2s' }}></div>
@@ -783,13 +793,6 @@ export default function RoomVoiceChatPage() {
                   </div>
                 )}
               </div>
-              
-              <p className="text-white font-medium text-center truncate max-w-full">
-                {participant.name}
-              </p>
-              {participant.userId === user?._id && (
-                <span className="text-xs text-emerald-500 mt-1">(You)</span>
-              )}
             </div>
           ))}
         </div>

@@ -15,6 +15,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useSocket } from "@/context/SocketContext";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ interface Room {
   description: string;
   participants: any[];
   maxParticipants: number;
+  participantsCount?: number;
 }
 
 const navItems = [
@@ -53,16 +55,12 @@ export function DashboardSidebar() {
     roomType: "public" as "public" | "private",
   });
   const { user, logout } = useAuth();
+  const { socket } = useSocket();
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     fetchRooms();
-    
-    // Refresh rooms list every 5 seconds to show updated participant counts
-    const interval = setInterval(fetchRooms, 5000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   const fetchRooms = async () => {
@@ -70,12 +68,44 @@ export function DashboardSidebar() {
       const response = await fetch("/api/rooms");
       const data = await response.json();
       if (response.ok && data.rooms) {
-        setRooms(data.rooms);
+        setRooms((prev) => data.rooms.map((room: Room) => {
+          const prevRoom = prev.find((r) => r._id === room._id);
+          return {
+            ...room,
+            participantsCount: prevRoom?.participantsCount ?? 0,
+          };
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch rooms:", error);
     }
   };
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRoomCountUpdated = (data: { roomId: string; count: number }) => {
+      setRooms((prev) => prev.map((room) =>
+        room._id === data.roomId ? { ...room, participantsCount: data.count } : room
+      ));
+    };
+
+    socket.emit("rooms-counts-request");
+
+    const handleRoomsCounts = (data: { counts: Array<{ roomId: string; count: number }> }) => {
+      setRooms((prev) => prev.map((room) => {
+        const match = data.counts.find((item) => item.roomId === room._id);
+        return match ? { ...room, participantsCount: match.count } : room;
+      }));
+    };
+
+    socket.on("room-count-updated", handleRoomCountUpdated);
+    socket.on("rooms-counts", handleRoomsCounts);
+    return () => {
+      socket.off("room-count-updated", handleRoomCountUpdated);
+      socket.off("rooms-counts", handleRoomsCounts);
+    };
+  }, [socket]);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -301,7 +331,7 @@ export function DashboardSidebar() {
                                         {room.name}
                                       </span>
                                       <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400">
-                                        {room.participants.length}/{room.maxParticipants}
+                                        {room.participantsCount ?? 0}/{room.maxParticipants}
                                       </span>
                                     </button>
                                   ))
