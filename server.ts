@@ -91,6 +91,15 @@ connectDB().then(() => {
         io.to(socketIdToCall).emit("call-answered", { signal: data.signal, from: data.from });
       }
     });
+
+    // Handle call termination
+    socket.on("end-call", (data) => {
+      const socketIdToCall = onlineUsers.get(data.to);
+      if (socketIdToCall) {
+        console.log(`Call ended by ${data.from}, notifying ${data.to}`);
+        io.to(socketIdToCall).emit("call-ended", { from: data.from });
+      }
+    });
     
     // Status updates
     socket.on("disconnect", (reason) => {

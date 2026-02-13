@@ -73,45 +73,8 @@ export default function CallManager() {
     // Don't prime on mount - wait for user gesture (call action)
   }, []);
 
-  // Handle Socket Events for Incoming Calls
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on("call-made", (data) => {
-      setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
-      setIsInCall(true);
-      // Play incoming ringtone - will work after user clicks accept/decline
-      console.log("📞 Incoming call - ringtone will play on user interaction");
-    });
-
-    return () => {
-      socket.off("call-made");
-    };
-  }, [socket, setIsInCall]);
-
-  // Play outgoing ringtone when making a call
-  useEffect(() => {
-    if (outgoingCallData && !callAccepted) {
-      // Prime media with user gesture (call button was clicked)
-      primeAllMedia();
-      
-      // Play with fallback to muted if blocked
-      if (outgoingRingtone.current) {
-        outgoingRingtone.current.volume = 1;
-        outgoingRingtone.current.muted = false;
-        outgoingRingtone.current.play().catch(err => {
-          console.log("🔇 Outgoing ringtone blocked, trying muted");
-          if (outgoingRingtone.current) {
-            outgoingRingtone.current.muted = true;
-            outgoingRingtone.current.play().catch(e => console.log("❌ Even muted ringtone failed"));
-          }
-        });
-      }
-    }
-  }, [outgoingCallData, callAccepted]);
-
-  // End call function (declared early so it can be used in startCall/answerCall)
-  const endCall = () => {
+  // Local cleanup without emitting (used when receiving call-ended event)
+  const endCallLocally = () => {
     // Stop all ringtones
     incomingRingtone.current?.pause();
     outgoingRingtone.current?.pause();
@@ -142,11 +105,69 @@ export default function CallManager() {
     setCallAccepted(false);
     setIsInCall(false);
     setIsMicOn(true);
+    setAudioBlocked(false);
     
     // Remove socket listeners
     socket?.off("call-answered");
     socket?.off("signal-received");
   };
+
+  // End call function - notifies other party and cleans up
+  const endCall = () => {
+    // Notify the other party that call is ending
+    const otherUserId = incomingCall?.from || outgoingCallData?.userId;
+    if (otherUserId && socket) {
+      console.log("📴 Ending call and notifying other party:", otherUserId);
+      socket.emit("end-call", { to: otherUserId, from: user?._id });
+    }
+    
+    // Perform local cleanup
+    endCallLocally();
+  };
+
+  // Handle Socket Events for Incoming Calls
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("call-made", (data) => {
+      setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
+      setIsInCall(true);
+      // Play incoming ringtone - will work after user clicks accept/decline
+      console.log("📞 Incoming call - ringtone will play on user interaction");
+    });
+
+    // Listen for call ended by other party
+    socket.on("call-ended", () => {
+      console.log("📴 Other party ended the call");
+      endCallLocally(); // Use local cleanup without emitting again
+    });
+
+    return () => {
+      socket.off("call-made");
+      socket.off("call-ended");
+    };
+  }, [socket, setIsInCall]);
+
+  // Play outgoing ringtone when making a call
+  useEffect(() => {
+    if (outgoingCallData && !callAccepted) {
+      // Prime media with user gesture (call button was clicked)
+      primeAllMedia();
+      
+      // Play with fallback to muted if blocked
+      if (outgoingRingtone.current) {
+        outgoingRingtone.current.volume = 1;
+        outgoingRingtone.current.muted = false;
+        outgoingRingtone.current.play().catch(err => {
+          console.log("🔇 Outgoing ringtone blocked, trying muted");
+          if (outgoingRingtone.current) {
+            outgoingRingtone.current.muted = true;
+            outgoingRingtone.current.play().catch(e => console.log("❌ Even muted ringtone failed"));
+          }
+        });
+      }
+    }
+  }, [outgoingCallData, callAccepted]);
 
   const startCall = async (idToCall: string) => {
     // 1. Get Media - Audio only for voice calls
