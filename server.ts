@@ -49,8 +49,13 @@ connectDB().then(() => {
   // Store connected users (socketId -> userId)
   // In a real app, use Redis. For this MVP, in-memory is fine.
   const onlineUsers = new Map<string, string>(); // userId -> socketId
-  const roomParticipants = new Map<string, Set<string>>(); // roomId -> Set of userIds
+  const roomParticipants = new Map<string, Map<string, { name: string; avatar: string | null; color: string }>>(); // roomId -> Map of userId -> profile
   const userSockets = new Map<string, string>(); // userId -> socketId for rooms
+
+  const emitRoomCount = (roomId: string) => {
+    const count = roomParticipants.get(roomId)?.size || 0;
+    io.emit("room-count-updated", { roomId, count });
+  };
 
   io.on("connection", (socket) => {
     console.log("New client connected:", socket.id);
@@ -77,6 +82,20 @@ connectDB().then(() => {
     socket.on("join-room", (data: { roomId: string; userId: string; userName: string; avatar: string | null; color: string }) => {
       const { roomId, userId, userName, avatar, color } = data;
       console.log(`User ${userName} (${userId}) joining room ${roomId}`);
+
+      // If user was already in another room, leave it first
+      const prevRoomId = socket.data.currentRoom as string | undefined;
+      if (prevRoomId && prevRoomId !== roomId) {
+        socket.leave(prevRoomId);
+        if (roomParticipants.has(prevRoomId)) {
+          roomParticipants.get(prevRoomId)!.delete(userId);
+          if (roomParticipants.get(prevRoomId)!.size === 0) {
+            roomParticipants.delete(prevRoomId);
+          }
+        }
+        socket.to(prevRoomId).emit("room-user-left", { userId });
+        emitRoomCount(prevRoomId);
+      }
       
       socket.join(roomId);
       userSockets.set(userId, socket.id);
@@ -84,22 +103,23 @@ connectDB().then(() => {
       socket.data.userId = userId;
       
       if (!roomParticipants.has(roomId)) {
-        roomParticipants.set(roomId, new Set());
+        roomParticipants.set(roomId, new Map());
       }
-      roomParticipants.get(roomId)!.add(userId);
+      roomParticipants.get(roomId)!.set(userId, { name: userName, avatar, color });
       
       // Notify others in the room
       socket.to(roomId).emit("room-user-joined", { userId, userName, avatar, color });
       
       // Send current participants to the joining user
-      const participants = Array.from(roomParticipants.get(roomId) || []).map(uid => ({
+      const participants = Array.from(roomParticipants.get(roomId)?.entries() || []).map(([uid, profile]) => ({
         userId: uid,
-        name: userName, // In production, fetch from DB
-        avatar: avatar,
-        color: color,
+        name: profile.name,
+        avatar: profile.avatar,
+        color: profile.color,
         isSpeaking: false,
       }));
       socket.emit("room-participants", { participants });
+      emitRoomCount(roomId);
     });
 
     socket.on("leave-room", (data: { roomId: string; userId: string }) => {
@@ -117,6 +137,7 @@ connectDB().then(() => {
       }
       
       socket.to(roomId).emit("room-user-left", { userId });
+      emitRoomCount(roomId);
     });
 
     socket.on("room-signal", (data: { roomId: string; targetUserId: string; signal: any }) => {
@@ -135,6 +156,14 @@ connectDB().then(() => {
       const { roomId, userId, isSpeaking } = data;
       // Broadcast speaking status to all other users in the room
       socket.to(roomId).emit("user-speaking", { userId, isSpeaking });
+    });
+
+    socket.on("rooms-counts-request", () => {
+      const counts = Array.from(roomParticipants.entries()).map(([roomId, members]) => ({
+        roomId,
+        count: members.size,
+      }));
+      socket.emit("rooms-counts", { counts });
     });
 
     // Generic Signaling for WebRTC (SimplePeer or Raw)
@@ -196,6 +225,7 @@ connectDB().then(() => {
         }
         userSockets.delete(userId);
         socket.to(currentRoom).emit("room-user-left", { userId });
+        emitRoomCount(currentRoom);
       }
     });
   });
