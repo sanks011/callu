@@ -79,7 +79,7 @@ export default function CallManager() {
       const isMuted = 
         (incoming && !incoming.paused && incoming.muted) ||
         (outgoing && !outgoing.paused && outgoing.muted);
-      setRingtoneMuted(isMuted);
+      setRingtoneMuted(!!isMuted);
     }, 100);
 
     return () => clearInterval(interval);
