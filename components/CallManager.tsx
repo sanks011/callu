@@ -146,37 +146,58 @@ export default function CallManager() {
       setStream(currentStream);
       if (myVideo.current) myVideo.current.srcObject = currentStream;
 
-      // 2. Create Peer
+      console.log("[CALLER] Got local stream with tracks:", currentStream.getTracks().map(t => t.kind));
+
+      // 2. Create Peer with better ICE servers (Google STUN + Twilio TURN)
       const peer = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+        ]
       });
       connectionRef.current = peer;
 
       // Add tracks
-      currentStream.getTracks().forEach(track => peer.addTrack(track, currentStream));
+      currentStream.getTracks().forEach(track => {
+        const sender = peer.addTrack(track, currentStream);
+        console.log("[CALLER] Added track:", track.kind, track.enabled);
+      });
+
+      // Monitor connection state
+      peer.onconnectionstatechange = () => {
+        console.log("[CALLER] Connection state:", peer.connectionState);
+      };
+
+      peer.oniceconnectionstatechange = () => {
+        console.log("[CALLER] ICE connection state:", peer.iceConnectionState);
+      };
 
       // Handle ICE
       peer.onicecandidate = (event) => {
         if (event.candidate) {
-          // Send candidate (we use signal-received generic channel or piggyback?)
-          // For raw WebRTC, we need full signaling. 
-          // Simplified: Just use 'send-signal' for everything.
+          console.log("[CALLER] Sending ICE candidate");
           socket?.emit("send-signal", { to: idToCall, signal: { candidate: event.candidate }, from: user?._id });
         }
       };
 
-      // Handle incoming stream
+      // Handle incoming stream from answerer
       peer.ontrack = (event) => {
-        if (userVideo.current) {
+        console.log("[CALLER] Received remote track:", event.track.kind, event.streams.length);
+        if (userVideo.current && event.streams[0]) {
           userVideo.current.srcObject = event.streams[0];
-          // Explicitly play the remote audio stream
-          userVideo.current.play().catch(err => console.log("Remote audio play failed:", err));
+          console.log("[CALLER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => t.kind));
+          // Explicitly play
+          userVideo.current.play().then(() => {
+            console.log("[CALLER] Remote audio playing successfully");
+          }).catch(err => console.error("[CALLER] Remote audio play failed:", err));
         }
       };
 
       // Create Offer
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+      console.log("[CALLER] Created offer");
 
       // Emit Call (send full offer with type and sdp)
       socket?.emit("call-user", {
@@ -189,21 +210,24 @@ export default function CallManager() {
 
       // Listen for Answer
       socket?.on("call-answered", async (data) => {
+        console.log("[CALLER] Received answer", data.signal ? 'with signal' : 'NO SIGNAL');
         if (data.signal && data.signal.type && data.signal.sdp) {
           await peer.setRemoteDescription(new RTCSessionDescription(data.signal));
+          console.log("[CALLER] Set remote description (answer)");
           // Stop outgoing ringtone when call is accepted
           outgoingRingtone.current?.pause();
           if (outgoingRingtone.current) outgoingRingtone.current.currentTime = 0;
           setCallAccepted(true);
         } else {
-          console.error("Invalid signal data received in call-answered:", data.signal);
+          console.error("[CALLER] Invalid signal data received in call-answered:", data.signal);
         }
       });
 
       // Listen for ICE from other side
       socket?.on("signal-received", async (data) => {
         if (data.signal.candidate) {
-           await peer.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
+          console.log("[CALLER] Received ICE candidate from answerer");
+          await peer.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
         }
       });
 
@@ -227,38 +251,65 @@ export default function CallManager() {
        setStream(currentStream);
        if (myVideo.current) myVideo.current.srcObject = currentStream;
 
+       console.log("[ANSWERER] Got local stream with tracks:", currentStream.getTracks().map(t => t.kind));
+
+       // Create Peer with better ICE servers
        const peer = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+        ]
       });
       connectionRef.current = peer;
 
-      currentStream.getTracks().forEach(track => peer.addTrack(track, currentStream));
+      // Add tracks
+      currentStream.getTracks().forEach(track => {
+        const sender = peer.addTrack(track, currentStream);
+        console.log("[ANSWERER] Added track:", track.kind, track.enabled);
+      });
+
+      // Monitor connection state
+      peer.onconnectionstatechange = () => {
+        console.log("[ANSWERER] Connection state:", peer.connectionState);
+      };
+
+      peer.oniceconnectionstatechange = () => {
+        console.log("[ANSWERER] ICE connection state:", peer.iceConnectionState);
+      };
 
       peer.onicecandidate = (event) => {
         if (event.candidate) {
+          console.log("[ANSWERER] Sending ICE candidate");
            socket?.emit("send-signal", { to: incomingCall.from, signal: { candidate: event.candidate }, from: user?._id });
         }
       };
 
       peer.ontrack = (event) => {
-        if (userVideo.current) {
+        console.log("[ANSWERER] Received remote track:", event.track.kind, event.streams.length);
+        if (userVideo.current && event.streams[0]) {
           userVideo.current.srcObject = event.streams[0];
-          // Explicitly play the remote audio stream
-          userVideo.current.play().catch(err => console.log("Remote audio play failed:", err));
+          console.log("[ANSWERER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => t.kind));
+          // Explicitly play
+          userVideo.current.play().then(() => {
+            console.log("[ANSWERER] Remote audio playing successfully");
+          }).catch(err => console.error("[ANSWERER] Remote audio play failed:", err));
         }
       };
 
       // Set Remote from incoming
       if (incomingCall.signal && incomingCall.signal.type && incomingCall.signal.sdp) {
+        console.log("[ANSWERER] Setting remote description (offer)");
         await peer.setRemoteDescription(new RTCSessionDescription(incomingCall.signal));
       } else {
-        console.error("Invalid signal data in incoming call:", incomingCall.signal);
+        console.error("[ANSWERER] Invalid signal data in incoming call:", incomingCall.signal);
         throw new Error("Invalid call signal data");
       }
 
       // Create Answer
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
+      console.log("[ANSWERER] Created answer");
 
       // Emit Answer (send full answer with type and sdp)
       socket?.emit("answer-call", {
@@ -270,6 +321,7 @@ export default function CallManager() {
       // Listen for Candidates from caller
       socket?.on("signal-received", async (data) => {
          if (data.signal.candidate) {
+            console.log("[ANSWERER] Received ICE candidate from caller");
             await peer.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
          }
       });
