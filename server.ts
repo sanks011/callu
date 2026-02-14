@@ -240,6 +240,12 @@ connectDB().then(() => {
         userSockets.delete(userId);
         socket.to(currentRoom).emit("room-user-left", { userId });
         emitRoomCount(currentRoom);
+
+        // Also clean up DB participants (handles browser refresh / crash)
+        Room.updateOne(
+          { _id: currentRoom },
+          { $pull: { participants: userId } }
+        ).catch((err: any) => console.error("Failed to remove user from room DB on disconnect:", err));
       }
     });
   });

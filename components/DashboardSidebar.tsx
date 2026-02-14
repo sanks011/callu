@@ -62,6 +62,7 @@ export function DashboardSidebar() {
     targetRoomId: string;
     targetRoomName: string;
   } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; roomId: string } | null>(null);
   const { user, logout } = useAuth();
   const { socket } = useSocket();
   const { isInCall, isInRoom, currentRoomId, currentRoomName } = useCall();
@@ -81,6 +82,9 @@ export function DashboardSidebar() {
           const prevRoom = prev.find((r) => r._id === room._id);
           return {
             ...room,
+            // Socket is the source of truth for live counts/participants.
+            // DB participants are stale — ignore them for the sidebar.
+            participants: prevRoom?.participants ?? [],
             participantsCount: prevRoom?.participantsCount ?? 0,
           };
         }));
@@ -368,66 +372,66 @@ export function DashboardSidebar() {
                                 {rooms.length === 0 ? (
                                   <div className="text-xs text-zinc-600 p-2">No rooms yet</div>
                                 ) : (
-                                  rooms.map((room) => (
+                                  rooms.map((room) => {
+                                    const isLive = (room.participantsCount ?? 0) > 0;
+                                    return (
                                     <div
                                       key={room._id}
-                                      className="flex items-center gap-2 group relative"
+                                      className="group relative"
+                                      onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        setContextMenu({ x: e.clientX, y: e.clientY, roomId: room._id });
+                                      }}
                                     >
                                       <button
                                         onClick={() => handleJoinRoom(room._id)}
                                         className={cn(
-                                          "flex flex-col gap-2 p-3 rounded-xl transition-all text-xs flex-1 text-left cursor-pointer border border-transparent",
-                                          "hover:bg-zinc-900/50 hover:border-zinc-800/50",
-                                          isRoomActive(room._id) ? "bg-zinc-900/80 border-emerald-500/20 shadow-lg shadow-emerald-900/10" : "text-zinc-500"
+                                          "flex items-center gap-2 w-full rounded-lg transition-all text-left cursor-pointer",
+                                          isLive ? "flex-col gap-1.5 p-2.5" : "p-2",
+                                          "hover:bg-zinc-900/50",
+                                          isRoomActive(room._id) ? "bg-zinc-900/80 text-white" : "text-zinc-500"
                                         )}
                                       >
-                                        <div className="flex items-center justify-between w-full mb-1">
-                                          <div className="flex items-center gap-2 overflow-hidden">
-                                            {room.participantsCount && room.participantsCount > 0 ? (
-                                              <div className="flex items-end gap-0.5 h-3 w-3 flex-shrink-0">
-                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0s' }}></span>
-                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-2/3" style={{ animationDelay: '0.1s' }}></span>
-                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0.2s' }}></span>
-                                              </div>
-                                            ) : (
-                                              <Volume2 className={cn("w-3.5 h-3.5 flex-shrink-0", isRoomActive(room._id) ? "text-emerald-500" : "text-zinc-500")} />
-                                            )}
-                                            
-                                            <span className={cn(
-                                              "whitespace-nowrap font-semibold truncate text-sm transition-colors",
-                                              isRoomActive(room._id) ? "text-white" : "text-zinc-400 group-hover:text-zinc-200"
-                                            )}>
-                                              {room.name}
-                                            </span>
-                                          </div>
-                                          
-                                          {room.participantsCount && room.participantsCount > 0 && (
-                                            <span className="flex h-2 w-2 relative flex-shrink-0">
-                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
+                                        {/* Top row: icon + name */}
+                                        <div className="flex items-center gap-2 w-full">
+                                          {isLive ? (
+                                            <div className="flex items-end gap-[2px] h-3 w-3 flex-shrink-0">
+                                              <span className="w-[3px] bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0s' }} />
+                                              <span className="w-[3px] bg-emerald-500 rounded-full animate-music-bar h-2/3" style={{ animationDelay: '0.15s' }} />
+                                              <span className="w-[3px] bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0.3s' }} />
+                                            </div>
+                                          ) : (
+                                            <Volume2 className="w-3.5 h-3.5 flex-shrink-0 text-zinc-600" />
+                                          )}
+                                          <span className={cn(
+                                            "truncate font-medium text-xs transition-colors flex-1",
+                                            isRoomActive(room._id) ? "text-white" : isLive ? "text-zinc-200" : "text-zinc-500 group-hover:text-zinc-300"
+                                          )}>
+                                            {room.name}
+                                          </span>
+                                          {!isLive && (
+                                            <span className="text-[10px] text-zinc-600 font-medium">0/{room.maxParticipants}</span>
                                           )}
                                         </div>
 
-                                        {/* Participants Avatars */}
-                                        {room.participants && room.participants.length > 0 && (
-                                          <div className="flex items-center justify-between pl-6 w-full">
-                                            <div className="flex -space-x-2">
+                                        {/* Avatars row — only for live rooms */}
+                                        {isLive && room.participants && room.participants.length > 0 && (
+                                          <div className="flex items-center justify-between pl-5 w-full">
+                                            <div className="flex -space-x-1.5">
                                               {room.participants.slice(0, 5).map((p: any, i: number) => {
                                                 const avatarUrl = p.avatar || p.avatarConfig?.image;
                                                 const avatarColor = p.color || p.avatarConfig?.color || '#059669';
-                                                
                                                 return (
-                                                  <div 
-                                                    key={p.userId || p._id || i} 
-                                                    className="w-5 h-5 rounded-full border-2 border-black bg-zinc-800 overflow-hidden ring-1 ring-white/10"
+                                                  <div
+                                                    key={p.userId || p._id || i}
+                                                    className="w-5 h-5 rounded-full border border-black bg-zinc-800 overflow-hidden"
                                                     title={p.name}
                                                     style={{ backgroundColor: !avatarUrl ? avatarColor : undefined }}
                                                   >
                                                     {avatarUrl ? (
                                                       <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                                                     ) : (
-                                                      <div className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white/90">
+                                                      <div className="w-full h-full flex items-center justify-center text-[7px] font-bold text-white/80">
                                                         {p.name?.[0]?.toUpperCase()}
                                                       </div>
                                                     )}
@@ -435,33 +439,19 @@ export function DashboardSidebar() {
                                                 );
                                               })}
                                               {room.participants.length > 5 && (
-                                                <div className="w-5 h-5 rounded-full border-2 border-black bg-zinc-800 flex items-center justify-center">
-                                                  <span className="text-[8px] font-bold text-zinc-400">+{room.participants.length - 5}</span>
+                                                <div className="w-5 h-5 rounded-full border border-black bg-zinc-800 flex items-center justify-center">
+                                                  <span className="text-[7px] font-bold text-zinc-400">+{room.participants.length - 5}</span>
                                                 </div>
                                               )}
                                             </div>
                                             <span className="text-[10px] text-zinc-500 font-medium">
-                                              {room.participants.length}/{room.maxParticipants}
+                                              {room.participantsCount}/{room.maxParticipants}
                                             </span>
                                           </div>
                                         )}
-                                        {(!room.participants || room.participants.length === 0) && (
-                                           <div className="pl-6 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              <div className="w-1.5 h-1.5 rounded-full bg-zinc-700"></div>
-                                              <span className="text-[10px] text-zinc-600 font-medium">Empty Room</span>
-                                           </div>
-                                        )}
-
-                                      </button>
-                                      <button
-                                        onClick={(e) => handleDeleteRoom(room._id, e)}
-                                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-zinc-600 hover:text-red-400 hover:bg-red-400/10 cursor-pointer absolute right-2 top-2"
-                                        title="Delete room"
-                                      >
-                                        <X className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
-                                  ))
+                                  );})
                                 )}
                               </motion.div>
                             )}
@@ -763,6 +753,28 @@ export function DashboardSidebar() {
           )}
         </button>
       </div>
+
+      {/* Right-click context menu for rooms */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div
+            className="fixed z-[61] bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 min-w-[140px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => {
+                handleDeleteRoom(contextMenu.roomId, { stopPropagation: () => {} } as any);
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              Delete Room
+            </button>
+          </div>
+        </>
+      )}
     </motion.aside>
   );
 }

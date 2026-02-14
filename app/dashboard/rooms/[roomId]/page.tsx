@@ -166,12 +166,19 @@ export default function RoomVoiceChatPage() {
     
     initializeRoom();
 
-    // Only cleanup on actual unmount (window unload or explicit leave)
+    // Handle tab/window close — use sendBeacon for reliable cleanup
     const handleBeforeUnload = () => {
-      if (isActive) {
-        leaveRoom();
-        cleanupConnections();
+      // sendBeacon is reliable during unload (unlike fetch)
+      if (user && roomId) {
+        navigator.sendBeacon(
+          "/api/rooms/leave",
+          new Blob([JSON.stringify({ roomId, userId: user._id })], { type: "application/json" })
+        );
       }
+      if (socket && roomId && user) {
+        socket.emit("leave-room", { roomId, userId: user._id });
+      }
+      cleanupConnections();
     };
     
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -179,7 +186,22 @@ export default function RoomVoiceChatPage() {
     return () => {
       isActive = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Clear room state on unmount
+
+      // Cleanup on unmount (e.g. navigating away, answering a call)
+      cleanupConnections();
+      if (socket && roomId && user) {
+        socket.emit("leave-room", { roomId, userId: user._id });
+      }
+      // Fire-and-forget DB leave
+      if (user && roomId) {
+        fetch("/api/rooms/leave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId, userId: user._id }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+      // Clear room state
       setIsInRoom(false);
       setCurrentRoomId(null);
       setCurrentRoomName(null);
@@ -692,32 +714,9 @@ export default function RoomVoiceChatPage() {
     setIsDeafened(!isDeafened);
   };
 
-  const leaveRoom = async () => {
-    // Cleanup connections first
-    cleanupConnections();
-    
-    // Emit socket leave event
-    if (socket && roomId && user) {
-      socket.emit("leave-room", { roomId, userId: user._id });
-    }
-
-    // Clear room state
-    setIsInRoom(false);
-    setCurrentRoomId(null);
-    setCurrentRoomName(null);
-
-    // Remove from DB participants
-    try {
-      await fetch("/api/rooms/leave", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId, userId: user?._id }),
-      });
-    } catch (error) {
-      console.error("Failed to leave room:", error);
-    }
-
-    // Navigate back to members
+  const leaveRoom = () => {
+    // Just navigate away — the useEffect cleanup handles socket leave,
+    // DB leave, connection cleanup, and state clearing automatically.
     router.push("/dashboard/members");
   };
 
@@ -910,7 +909,7 @@ export default function RoomVoiceChatPage() {
             <button
               onClick={toggleMute}
               data-tooltip="Toggle Mute"
-              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative ${
+              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                 isMuted
                   ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
                   : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
@@ -924,7 +923,7 @@ export default function RoomVoiceChatPage() {
 
             <button
               onClick={toggleDeafen}
-              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative ${
+              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                 isDeafened
                   ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
                   : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
@@ -940,7 +939,7 @@ export default function RoomVoiceChatPage() {
 
             <button
               onClick={leaveRoom}
-              className="p-3.5 md:p-4 rounded-xl bg-red-600 hover:bg-red-500 text-white transition-all shadow-lg shadow-red-900/20 group relative"
+              className="p-3.5 md:p-4 rounded-xl bg-red-600 hover:bg-red-500 text-white transition-all shadow-lg shadow-red-900/20 group relative cursor-pointer"
             >
               <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
               <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-950 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-zinc-800">

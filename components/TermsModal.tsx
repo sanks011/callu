@@ -107,7 +107,7 @@ export default function TermsModal() {
           {/* Agree Button */}
           <button
             onClick={handleAccept}
-            className="w-full bg-white hover:bg-zinc-200 text-black py-2.5 rounded-lg font-medium text-sm transition-colors active:scale-[0.98]"
+            className="w-full bg-white hover:bg-zinc-200 text-black py-2.5 rounded-lg font-medium text-sm transition-colors active:scale-[0.98] cursor-pointer"
           >
             I Agree & Enter
           </button>
