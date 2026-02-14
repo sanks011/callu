@@ -1216,7 +1216,6 @@ export default function CallManager() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callAccepted, outgoingCallData?.callType, incomingCall?.callType]);
 
   // ─── PiP event listeners on remote video ─────────────────────
