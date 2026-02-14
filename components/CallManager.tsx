@@ -85,6 +85,11 @@ export default function CallManager() {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
 
+  // Audio mixing refs (for screen share + mic mixing)
+  const mixingCtxRef = useRef<AudioContext | null>(null);
+  const originalMicTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [isShareAudioActive, setIsShareAudioActive] = useState(false);
+
   // ICE candidate buffer - stores candidates that arrive before peer is ready
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
   const audioUnlocked = useRef(false);
@@ -320,6 +325,7 @@ export default function CallManager() {
     setIsScreenSharing(false);
     setIsSwapped(false);
     setPipHovered(false);
+    setIsShareAudioActive(false);
 
     // Cleanup screen share
     if (screenStreamRef.current) {
@@ -327,6 +333,17 @@ export default function CallManager() {
       screenStreamRef.current = null;
     }
     cameraTrackRef.current = null;
+    originalMicTrackRef.current = null;
+
+    // Cleanup audio mixing context
+    if (mixingCtxRef.current) {
+      try {
+        mixingCtxRef.current.close();
+      } catch {
+        // already closed
+      }
+      mixingCtxRef.current = null;
+    }
 
     socket?.off("call-answered");
   };
@@ -846,10 +863,12 @@ export default function CallManager() {
     if (!isScreenSharing) {
       // START screen sharing
       try {
+        // Request screen with audio — Chrome will show "Share tab audio" checkbox
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { cursor: "always" } as MediaTrackConstraints,
-          audio: false,
-        });
+          audio: true,
+          systemAudio: "include",
+        } as DisplayMediaStreamOptions);
         const screenTrack = screenStream.getVideoTracks()[0];
         if (!screenTrack) return;
 
@@ -861,6 +880,52 @@ export default function CallManager() {
         const videoSender = peer.getSenders().find((s) => s.track?.kind === "video");
         if (videoSender) {
           await videoSender.replaceTrack(screenTrack);
+        }
+
+        // ─── Screen audio + mic mixing ───────────────────────────
+        const screenAudioTracks = screenStream.getAudioTracks();
+        if (screenAudioTracks.length > 0) {
+          // User opted to share tab/system audio
+          const micTrack = streamRef.current?.getAudioTracks()[0] || null;
+
+          // Save original mic track for later restoration
+          if (micTrack) {
+            originalMicTrackRef.current = micTrack;
+          }
+
+          // Create a mixing AudioContext
+          const mixCtx = new AudioContext();
+          mixingCtxRef.current = mixCtx;
+
+          const destination = mixCtx.createMediaStreamDestination();
+
+          // Source 1: screen/tab audio
+          const screenAudioStream = new MediaStream(screenAudioTracks);
+          const screenSource = mixCtx.createMediaStreamSource(screenAudioStream);
+          const screenGain = mixCtx.createGain();
+          screenGain.gain.value = 0.7;
+          screenSource.connect(screenGain).connect(destination);
+
+          // Source 2: microphone audio
+          if (micTrack) {
+            const micStream = new MediaStream([micTrack]);
+            const micSource = mixCtx.createMediaStreamSource(micStream);
+            const micGain = mixCtx.createGain();
+            micGain.gain.value = 1.0;
+            micSource.connect(micGain).connect(destination);
+          }
+
+          // Get the mixed audio track and send it to the peer
+          const mixedTrack = destination.stream.getAudioTracks()[0];
+          if (mixedTrack) {
+            const audioSender = peer.getSenders().find((s) => s.track?.kind === "audio");
+            if (audioSender) {
+              await audioSender.replaceTrack(mixedTrack);
+            }
+          }
+
+          setIsShareAudioActive(true);
+          console.log("🔊 Screen audio + mic mixed and sending to peer");
         }
 
         // Update local preview to show screen share
@@ -896,6 +961,26 @@ export default function CallManager() {
       screenStreamRef.current.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
     }
+
+    // ─── Restore original mic track (undo audio mixing) ─────────
+    if (isShareAudioActive && originalMicTrackRef.current && peer) {
+      const audioSender = peer.getSenders().find((s) => s.track?.kind === "audio");
+      if (audioSender) {
+        await audioSender.replaceTrack(originalMicTrackRef.current);
+      }
+    }
+    originalMicTrackRef.current = null;
+
+    // Close mixing AudioContext
+    if (mixingCtxRef.current) {
+      try {
+        await mixingCtxRef.current.close();
+      } catch {
+        // already closed
+      }
+      mixingCtxRef.current = null;
+    }
+    setIsShareAudioActive(false);
 
     // Restore camera track
     const cameraTrack = cameraTrackRef.current;
@@ -1468,12 +1553,17 @@ export default function CallManager() {
                 <div className="flex flex-col items-center gap-1">
                   <button
                     onClick={() => void toggleScreenShare()}
-                    className={`p-3 rounded-full transition-all cursor-pointer ${
+                    className={`p-3 rounded-full transition-all cursor-pointer relative ${
                       isScreenSharing ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/50" : "bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700"
                     }`}
                     aria-label="Toggle screen share"
                   >
                     {isScreenSharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
+                    {isShareAudioActive && (
+                      <span className="absolute -top-1 -right-1 bg-emerald-400 rounded-full p-0.5">
+                        <Volume2 size={10} className="text-black" />
+                      </span>
+                    )}
                   </button>
                 </div>
 
