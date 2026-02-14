@@ -1227,218 +1227,219 @@ export default function CallManager() {
           </div>
         ) : (
           // VIDEO CALL - Full-screen style
-          <div className="fixed inset-0 bg-black flex flex-col items-center justify-between p-6 z-50">
+          <div className="fixed inset-0 bg-black z-50">
+            {/* Remote video — fills the ENTIRE screen */}
+            <video
+              playsInline
+              ref={userVideo}
+              autoPlay
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+
+            {/* Fallback if no remote video */}
+            {!remoteVideoAvailable && (
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex flex-col items-center justify-center z-[1]">
+                <div className="w-32 h-32 rounded-full mb-4 overflow-hidden ring-4 ring-green-500">
+                  {incomingCall?.avatar ? (
+                    <img src={incomingCall.avatar} alt={incomingCall.name} className="w-full h-full object-cover" />
+                  ) : outgoingCallData?.userAvatar ? (
+                    <img src={outgoingCallData.userAvatar} alt={outgoingCallData.userName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-4xl font-bold text-white">
+                      {(incomingCall?.name || outgoingCallData?.userName || "?")[0].toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <p className="text-zinc-400">Waiting for video...</p>
+              </div>
+            )}
+
+            {/* Local video (picture-in-picture) — overlaid on top */}
+            <video
+              playsInline
+              muted
+              ref={myVideo}
+              autoPlay
+              className={`absolute top-4 right-4 w-32 h-40 object-cover rounded-2xl border-2 border-zinc-700/50 shadow-2xl z-20 ${isVideoOn ? '' : 'hidden'}`}
+            />
+
+            {/* Minimize button */}
             <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setIsMinimized(true);
               }}
-              className="absolute top-4 right-4 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 z-10"
+              className="absolute top-4 left-4 p-2 rounded-lg bg-black/50 backdrop-blur-sm hover:bg-black/70 text-zinc-200 z-20"
               aria-label="Minimize call"
             >
               <Minimize2 size={16} />
             </button>
 
-            {/* Main video grid */}
-            <div className="flex-1 w-full max-h-[70vh] relative bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
-              {/* Remote video (large) */}
-              <video
-                playsInline
-                ref={userVideo}
-                autoPlay
-                className="w-full h-full object-cover absolute inset-0"
-              />
-
-              {/* Local video (picture-in-picture) */}
-              <video
-                playsInline
-                muted
-                ref={myVideo}
-                autoPlay
-                className={`absolute bottom-4 right-4 w-32 h-40 object-cover rounded-lg border-2 border-zinc-700 shadow-lg z-10 ${isVideoOn ? '' : 'hidden'}`}
-              />
-
-              {/* Fallback if no remote video */}
-              {!remoteVideoAvailable && (
-                <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex flex-col items-center justify-center">
-                  <div className="w-32 h-32 rounded-full mb-4 overflow-hidden ring-4 ring-green-500">
-                    {incomingCall?.avatar ? (
-                      <img src={incomingCall.avatar} alt={incomingCall.name} className="w-full h-full object-cover" />
-                    ) : outgoingCallData?.userAvatar ? (
-                      <img src={outgoingCallData.userAvatar} alt={outgoingCallData.userName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-4xl font-bold text-white">
-                        {(incomingCall?.name || outgoingCallData?.userName || "?")[0].toUpperCase()}
-                      </div>
-                    )}
+            {/* Speaking indicators — overlaid top center */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full backdrop-blur-sm ${isLocalSpeaking ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border border-zinc-700/50 bg-black/30 text-zinc-400"}`}>
+                <span className="text-[10px] uppercase tracking-widest">You</span>
+                {isLocalSpeaking && (
+                  <div className="flex items-center gap-0.5">
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
                   </div>
-                  <p className="text-zinc-400">Waiting for video...</p>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Speaking indicators overlay */}
-              <div className="absolute top-4 left-4 flex gap-2">
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isLocalSpeaking ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-400"}`}>
-                  <span className="text-[10px] uppercase tracking-widest">You</span>
-                  {isLocalSpeaking && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
-                    </div>
-                  )}
-                </div>
-
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isRemoteSpeaking ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-400"}`}>
-                  <span className="text-[10px] uppercase tracking-widest">Them</span>
-                  {isRemoteSpeaking && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
-                      <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
-                    </div>
-                  )}
-                </div>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full backdrop-blur-sm ${isRemoteSpeaking ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border border-zinc-700/50 bg-black/30 text-zinc-400"}`}>
+                <span className="text-[10px] uppercase tracking-widest">Them</span>
+                {isRemoteSpeaking && (
+                  <div className="flex items-center gap-0.5">
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "6px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.1s" }}></span>
+                    <span className="w-0.5 bg-emerald-400 rounded-full" style={{ height: "4px", animation: "soundwave 0.6s ease-in-out infinite", animationDelay: "0.2s" }}></span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Call info and controls */}
-            <div className="text-center mb-4">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <h3 className="text-xl font-medium text-white">{incomingCall?.name || outgoingCallData?.userName}</h3>
-                <img src="/Verification-Blue-Tick-PNG.webp" alt="Verified" className="w-5 h-5 flex-shrink-0" />
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-sm text-emerald-400">Connected</span>
-              </div>
-            </div>
-
-            {/* Call Controls */}
-            <div className="flex items-center gap-4 bg-zinc-900/80 px-6 py-4 rounded-full border border-zinc-700">
-              <div className="flex flex-col items-center gap-1">
-                <button
-                  onClick={toggleCamera}
-                  className={`p-3 rounded-full transition-all cursor-pointer ${
-                    !isVideoOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  }`}
-                  aria-label="Toggle camera"
-                >
-                  {isVideoOn ? <Video size={20} /> : <VideoOff size={20} />}
-                </button>
+            {/* Bottom overlay — name + controls bar on top of video */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pb-8 px-6 flex flex-col items-center">
+              {/* Call info */}
+              <div className="text-center mb-4">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <h3 className="text-xl font-medium text-white drop-shadow-lg">{incomingCall?.name || outgoingCallData?.userName}</h3>
+                  <img src="/Verification-Blue-Tick-PNG.webp" alt="Verified" className="w-5 h-5 flex-shrink-0" />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-emerald-400">Connected</span>
+                </div>
               </div>
 
-              <div className="flex flex-col items-center gap-1 relative">
-                <div className="flex items-center gap-2">
+              {/* Call Controls */}
+              <div className="flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-4 rounded-full border border-zinc-700/50">
+                <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={toggleMic}
+                    onClick={toggleCamera}
                     className={`p-3 rounded-full transition-all cursor-pointer ${
-                      !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                      !isVideoOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700"
                     }`}
-                    aria-label="Toggle mic"
+                    aria-label="Toggle camera"
                   >
-                    {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMicMenu((prev) => !prev);
-                      setShowSpeakerMenu(false);
-                    }}
-                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                    aria-label="Select microphone"
-                  >
-                    <ChevronDown size={14} />
+                    {isVideoOn ? <Video size={20} /> : <VideoOff size={20} />}
                   </button>
                 </div>
 
-                {showMicMenu && (
-                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
-                    {availableMics.length === 0 ? (
-                      <div className="text-xs text-zinc-400 px-2 py-1">No microphones found</div>
-                    ) : (
-                      availableMics.map((device, index) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void switchMicDevice(device.deviceId);
-                            setShowMicMenu(false);
-                          }}
-                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
-                            selectedMicId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate">{device.label || `Microphone ${index + 1}`}</span>
-                            {selectedMicId === device.deviceId && <span className="text-[10px]">Active</span>}
-                          </div>
-                        </button>
-                      ))
-                    )}
+                <div className="flex flex-col items-center gap-1 relative">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={toggleMic}
+                      className={`p-3 rounded-full transition-all cursor-pointer ${
+                        !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700"
+                      }`}
+                      aria-label="Toggle mic"
+                    >
+                      {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMicMenu((prev) => !prev);
+                        setShowSpeakerMenu(false);
+                      }}
+                      className="p-2 rounded-full bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700"
+                      aria-label="Select microphone"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
                   </div>
-                )}
-              </div>
 
-              <div className="flex flex-col items-center gap-1 relative">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSpeakerMenu((prev) => !prev);
-                      setShowMicMenu(false);
-                    }}
-                    className="p-3 rounded-full transition-all cursor-pointer bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                    aria-label="Select speaker"
-                  >
-                    <Volume2 size={20} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSpeakerMenu((prev) => !prev);
-                      setShowMicMenu(false);
-                    }}
-                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                    aria-label="Select speaker"
-                  >
-                    <ChevronDown size={14} />
-                  </button>
+                  {showMicMenu && (
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                      {availableMics.length === 0 ? (
+                        <div className="text-xs text-zinc-400 px-2 py-1">No microphones found</div>
+                      ) : (
+                        availableMics.map((device, index) => (
+                          <button
+                            key={device.deviceId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void switchMicDevice(device.deviceId);
+                              setShowMicMenu(false);
+                            }}
+                            className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                              selectedMicId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate">{device.label || `Microphone ${index + 1}`}</span>
+                              {selectedMicId === device.deviceId && <span className="text-[10px]">Active</span>}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {showSpeakerMenu && (
-                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
-                    {availableSpeakers.length === 0 ? (
-                      <div className="text-xs text-zinc-400 px-2 py-1">No speakers found</div>
-                    ) : (
-                      availableSpeakers.map((device, index) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSpeakerId(device.deviceId);
-                            setShowSpeakerMenu(false);
-                          }}
-                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
-                            selectedSpeakerId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate">{device.label || `Speaker ${index + 1}`}</span>
-                            {selectedSpeakerId === device.deviceId && <span className="text-[10px]">Active</span>}
-                          </div>
-                        </button>
-                      ))
-                    )}
+                <div className="flex flex-col items-center gap-1 relative">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowSpeakerMenu((prev) => !prev);
+                        setShowMicMenu(false);
+                      }}
+                      className="p-3 rounded-full transition-all cursor-pointer bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700"
+                      aria-label="Select speaker"
+                    >
+                      <Volume2 size={20} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowSpeakerMenu((prev) => !prev);
+                        setShowMicMenu(false);
+                      }}
+                      className="p-2 rounded-full bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700"
+                      aria-label="Select speaker"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
                   </div>
-                )}
-              </div>
 
-              <div className="flex flex-col items-center gap-1">
-                <button onClick={endCall} className="p-3 rounded-full bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg hover:shadow-red-500/50 cursor-pointer">
-                  <PhoneOff size={20} />
-                </button>
+                  {showSpeakerMenu && (
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                      {availableSpeakers.length === 0 ? (
+                        <div className="text-xs text-zinc-400 px-2 py-1">No speakers found</div>
+                      ) : (
+                        availableSpeakers.map((device, index) => (
+                          <button
+                            key={device.deviceId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSpeakerId(device.deviceId);
+                              setShowSpeakerMenu(false);
+                            }}
+                            className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                              selectedSpeakerId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate">{device.label || `Speaker ${index + 1}`}</span>
+                              {selectedSpeakerId === device.deviceId && <span className="text-[10px]">Active</span>}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col items-center gap-1">
+                  <button onClick={endCall} className="p-3 rounded-full bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg hover:shadow-red-500/50 cursor-pointer">
+                    <PhoneOff size={20} />
+                  </button>
+                </div>
               </div>
             </div>
 
