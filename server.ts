@@ -53,8 +53,17 @@ connectDB().then(() => {
   const userSockets = new Map<string, string>(); // userId -> socketId for rooms
 
   const emitRoomCount = (roomId: string) => {
-    const count = roomParticipants.get(roomId)?.size || 0;
-    io.emit("room-count-updated", { roomId, count });
+    const participantsMap = roomParticipants.get(roomId);
+    const count = participantsMap?.size || 0;
+    const participants = participantsMap 
+      ? Array.from(participantsMap.values()).slice(0, 5).map(p => ({
+          name: p.name,
+          avatar: p.avatar,
+          color: p.color
+        }))
+      : [];
+    
+    io.emit("room-count-updated", { roomId, count, participants });
   };
 
   io.on("connection", (socket) => {
@@ -162,6 +171,11 @@ connectDB().then(() => {
       const counts = Array.from(roomParticipants.entries()).map(([roomId, members]) => ({
         roomId,
         count: members.size,
+        participants: Array.from(members.values()).slice(0, 5).map(p => ({
+          name: p.name,
+          avatar: p.avatar,
+          color: p.color
+        }))
       }));
       socket.emit("rooms-counts", { counts });
     });

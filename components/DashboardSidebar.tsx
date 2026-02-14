@@ -93,18 +93,18 @@ export function DashboardSidebar() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleRoomCountUpdated = (data: { roomId: string; count: number }) => {
-      setRooms((prev) => prev.map((room) =>
-        room._id === data.roomId ? { ...room, participantsCount: data.count } : room
-      ));
+    const handleRoomCountUpdated = (data: { roomId: string; count: number; participants: any[] }) => {
+      setRooms((prev) => prev.map((room) => {
+        return room._id === data.roomId ? { ...room, participantsCount: data.count, participants: data.participants } : room;
+      }));
     };
 
     socket.emit("rooms-counts-request");
 
-    const handleRoomsCounts = (data: { counts: Array<{ roomId: string; count: number }> }) => {
+    const handleRoomsCounts = (data: { counts: Array<{ roomId: string; count: number; participants: any[] }> }) => {
       setRooms((prev) => prev.map((room) => {
         const match = data.counts.find((item) => item.roomId === room._id);
-        return match ? { ...room, participantsCount: match.count } : room;
+        return match ? { ...room, participantsCount: match.count, participants: match.participants } : room;
       }));
     };
 
@@ -355,46 +355,92 @@ export function DashboardSidebar() {
                             </button>
                           </div>
 
-                          {/* Room List */}
-                          <AnimatePresence>
-                            {expandedRooms && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden ml-4 mt-1 space-y-1"
-                              >
-                                {rooms.length === 0 ? (
-                                  <div className="text-xs text-zinc-600 p-2">No rooms yet</div>
-                                ) : (
-                                  rooms.map((room) => (
-                                    <div
-                                      key={room._id}
-                                      className="flex items-center gap-2 group"
-                                    >
                                       <button
                                         onClick={() => handleJoinRoom(room._id)}
                                         className={cn(
-                                          "flex items-center gap-2 p-2 rounded-lg transition-all text-xs flex-1 text-left cursor-pointer",
-                                          "hover:bg-zinc-900/50 text-zinc-500 hover:text-white",
-                                          isRoomActive(room._id) && "bg-zinc-900/50 text-white"
+                                          "flex flex-col gap-2 p-3 rounded-xl transition-all text-xs flex-1 text-left cursor-pointer border border-transparent",
+                                          "hover:bg-zinc-900/50 hover:border-zinc-800/50",
+                                          isRoomActive(room._id) ? "bg-zinc-900/80 border-emerald-500/20 shadow-lg shadow-emerald-900/10" : "text-zinc-500"
                                         )}
                                       >
-                                        <Volume2 className="w-3 h-3 flex-shrink-0" />
-                                        <span className="whitespace-nowrap font-medium truncate flex-1">
-                                          {room.name}
-                                        </span>
-                                        <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400">
-                                          {room.participantsCount ?? 0}/{room.maxParticipants}
-                                        </span>
+                                        <div className="flex items-center justify-between w-full mb-1">
+                                          <div className="flex items-center gap-2 overflow-hidden">
+                                            {room.participantsCount && room.participantsCount > 0 ? (
+                                              <div className="flex items-end gap-0.5 h-3 w-3 flex-shrink-0">
+                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0s' }}></span>
+                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-2/3" style={{ animationDelay: '0.1s' }}></span>
+                                                <span className="w-0.5 bg-emerald-500 rounded-full animate-music-bar h-full" style={{ animationDelay: '0.2s' }}></span>
+                                              </div>
+                                            ) : (
+                                              <Volume2 className={cn("w-3.5 h-3.5 flex-shrink-0", isRoomActive(room._id) ? "text-emerald-500" : "text-zinc-500")} />
+                                            )}
+                                            
+                                            <span className={cn(
+                                              "whitespace-nowrap font-semibold truncate text-sm transition-colors",
+                                              isRoomActive(room._id) ? "text-white" : "text-zinc-400 group-hover:text-zinc-200"
+                                            )}>
+                                              {room.name}
+                                            </span>
+                                          </div>
+                                          
+                                          {room.participantsCount && room.participantsCount > 0 && (
+                                            <span className="flex h-2 w-2 relative flex-shrink-0">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Participants Avatars */}
+                                        {room.participants && room.participants.length > 0 && (
+                                          <div className="flex items-center justify-between pl-6 w-full">
+                                            <div className="flex -space-x-2">
+                                              {room.participants.slice(0, 5).map((p: any, i: number) => {
+                                                const avatarUrl = p.avatar || p.avatarConfig?.image;
+                                                const avatarColor = p.color || p.avatarConfig?.color || '#059669';
+                                                
+                                                return (
+                                                  <div 
+                                                    key={p.userId || p._id || i} 
+                                                    className="w-5 h-5 rounded-full border-2 border-black bg-zinc-800 overflow-hidden ring-1 ring-white/10"
+                                                    title={p.name}
+                                                    style={{ backgroundColor: !avatarUrl ? avatarColor : undefined }}
+                                                  >
+                                                    {avatarUrl ? (
+                                                      <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                      <div className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white/90">
+                                                        {p.name?.[0]?.toUpperCase()}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                              {room.participants.length > 5 && (
+                                                <div className="w-5 h-5 rounded-full border-2 border-black bg-zinc-800 flex items-center justify-center">
+                                                  <span className="text-[8px] font-bold text-zinc-400">+{room.participants.length - 5}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                            <span className="text-[10px] text-zinc-500 font-medium">
+                                              {room.participants.length}/{room.maxParticipants}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(!room.participants || room.participants.length === 0) && (
+                                           <div className="pl-6 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-zinc-700"></div>
+                                              <span className="text-[10px] text-zinc-600 font-medium">Empty Room</span>
+                                           </div>
+                                        )}
+
                                       </button>
                                       <button
                                         onClick={(e) => handleDeleteRoom(room._id, e)}
-                                        className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
+                                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-zinc-600 hover:text-red-400 hover:bg-red-400/10 cursor-pointer absolute right-2 top-2"
                                         title="Delete room"
                                       >
-                                        <X className="w-3 h-3" />
+                                        <X className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   ))
