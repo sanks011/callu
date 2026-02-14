@@ -724,14 +724,21 @@ export function DashboardSidebar() {
       <div className={cn("border-t border-zinc-900 mt-auto", isCollapsed ? "p-4" : "p-6")}>
         {user && (
           <div className={cn(
-            "flex items-center mb-3 rounded-xl p-2 transition-all",
-            isVoiceConnected ? "border border-emerald-500/30 bg-emerald-500/5" : "",
+            "relative group/voice flex items-center mb-3 rounded-xl p-2 transition-all",
             isCollapsed ? "justify-center" : "gap-3"
           )}>
-             <div className={cn(
-               "w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 border-2 transition-colors",
-               isVoiceConnected ? "border-emerald-500" : "border-zinc-800 bg-zinc-800"
-             )}>
+             <div
+               className={cn(
+                 "w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 border-2 transition-colors",
+                 isVoiceConnected ? "border-emerald-500 cursor-pointer" : "border-zinc-800 bg-zinc-800"
+               )}
+               onClick={() => {
+                 if (isVoiceConnected && voiceRoomId) {
+                   sessionStorage.setItem('room-join-intent', 'true');
+                   router.push(`/dashboard/rooms/${voiceRoomId}`);
+                 }
+               }}
+             >
                 {user.avatarConfig?.image ? (
                   <img
                     src={user.avatarConfig.image}
@@ -758,34 +765,36 @@ export function DashboardSidebar() {
                     <p className="text-xs text-zinc-500 truncate max-w-[120px]">{user.email}</p>
                    </motion.div>
               )}
+
+              {/* ─── Voice Connected tooltip (hover only) ─── */}
+              {isVoiceConnected && voiceRoomId && (
+                <div
+                  onClick={() => {
+                    sessionStorage.setItem('room-join-intent', 'true');
+                    router.push(`/dashboard/rooms/${voiceRoomId}`);
+                  }}
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl bg-zinc-900 border border-emerald-500/30 shadow-xl shadow-black/40 opacity-0 pointer-events-none group-hover/voice:opacity-100 group-hover/voice:pointer-events-auto transition-all duration-200 cursor-pointer hover:bg-zinc-800 whitespace-nowrap z-50"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-shrink-0">
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-500" />
+                      <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Voice Connected</p>
+                      <p className="text-[11px] text-zinc-400 truncate max-w-[140px]">{voiceRoomName || 'Room'}</p>
+                    </div>
+                  </div>
+                  {/* Arrow */}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-900 border-r border-b border-emerald-500/30 rotate-45 -mt-1" />
+                </div>
+              )}
           </div>
         )}
 
-        {/* ─── Voice Connected Bar (below user profile) ─── */}
+        {/* ─── Voice controls (mute/deafen/disconnect) ─── */}
         {isVoiceConnected && voiceRoomId && (
-          <div className="mb-3">
-            <div
-              onClick={() => {
-                sessionStorage.setItem('room-join-intent', 'true');
-                router.push(`/dashboard/rooms/${voiceRoomId}`);
-              }}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all mb-1.5",
-                isCollapsed ? "justify-center" : ""
-              )}
-            >
-              <div className="relative flex-shrink-0">
-                <Volume2 className="w-4 h-4 text-emerald-500" />
-                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              </div>
-              {!isCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">Voice Connected</p>
-                  <p className="text-xs text-zinc-400 truncate">{voiceRoomName || 'Room'}</p>
-                </div>
-              )}
-            </div>
-            <div className={cn("flex items-center justify-center gap-1", isCollapsed ? "flex-col" : "")}>
+          <div className="flex items-center justify-center gap-1 mb-3">
               <button
                 onClick={(e) => { e.stopPropagation(); toggleMute(); }}
                 className={cn(
@@ -821,7 +830,6 @@ export function DashboardSidebar() {
               >
                 <PhoneOff className="w-3.5 h-3.5" />
               </button>
-            </div>
           </div>
         )}
 
