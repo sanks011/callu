@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { useSocket } from "@/context/SocketContext";
 import { useRoomVoice } from "@/context/RoomVoiceContext";
+import { useRoomMusic } from "@/context/RoomMusicContext";
 import { toast } from "sonner";
-import RoomMusicPlayer from "@/components/RoomMusicPlayer";
 
 interface Room {
   _id: string;
@@ -65,8 +65,8 @@ export default function RoomVoiceChatPage() {
   const [isInPiP, setIsInPiP] = useState(false);
   const [layout, setLayout] = useState<"grid" | "spotlight">("grid");
   const [spotlightUserId, setSpotlightUserId] = useState<string | null>(null);
-  const [isMusicOpen, setIsMusicOpen] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const { isMusicPanelOpen: isMusicOpen, openMusicPlayer, closeMusicPanel } = useRoomMusic();
 
   // ─── Local refs (video-only, page-scoped) ───────────────────────
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -1080,7 +1080,7 @@ export default function RoomVoiceChatPage() {
                   >
                     <button
                       onClick={() => {
-                        setIsMusicOpen(true);
+                        openMusicPlayer(roomId);
                         setShowToolsMenu(false);
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-all cursor-pointer"
@@ -1126,13 +1126,7 @@ export default function RoomVoiceChatPage() {
         />
       )}
 
-      {/* Music Player Panel */}
-      <RoomMusicPlayer
-        roomId={roomId}
-        isOpen={isMusicOpen}
-        onClose={() => setIsMusicOpen(false)}
-        onOpen={() => setIsMusicOpen(true)}
-      />
+      {/* Music Player Panel – now rendered persistently in dashboard layout */}
 
       <style jsx global>{`
         @keyframes music-bar {

@@ -4,7 +4,9 @@ import { useAuth } from "@/context/AuthContext";
 import { SocketProvider } from "@/context/SocketContext";
 import { CallProvider } from "@/context/CallContext";
 import { RoomVoiceProvider } from "@/context/RoomVoiceContext";
+import { RoomMusicProvider } from "@/context/RoomMusicContext";
 import CallManager from "@/components/CallManager";
+import PersistentMusicPlayer from "@/components/PersistentMusicPlayer";
 import TermsModal from "@/components/TermsModal";
 import CustomContextMenu from "@/components/CustomContextMenu";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
@@ -37,6 +39,7 @@ export default function DashboardLayout({
     <SocketProvider>
       <CallProvider>
         <RoomVoiceProvider>
+        <RoomMusicProvider>
           <div className="min-h-screen bg-black text-white flex">
              <DashboardSidebar />
              
@@ -45,6 +48,7 @@ export default function DashboardLayout({
              </main>
 
              <CallManager />
+             <PersistentMusicPlayer />
              <TermsModal />
              <CustomContextMenu />
              <Toaster 
@@ -60,6 +64,7 @@ export default function DashboardLayout({
                }}
              />
           </div>
+        </RoomMusicProvider>
         </RoomVoiceProvider>
       </CallProvider>
     </SocketProvider>
