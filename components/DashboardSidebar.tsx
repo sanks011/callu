@@ -721,70 +721,17 @@ export function DashboardSidebar() {
         )}
       </AnimatePresence>
 
-      {/* ─── Voice Connected Bar ─── */}
-      {isVoiceConnected && voiceRoomId && (
-        <div className={cn("border-t border-zinc-900", isCollapsed ? "p-2" : "px-4 py-3")}>
-          <div
-            onClick={() => {
-              sessionStorage.setItem('room-join-intent', 'true');
-              router.push(`/dashboard/rooms/${voiceRoomId}`);
-            }}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all group mb-2"
-          >
-            <div className="relative flex-shrink-0">
-              <Volume2 className="w-4 h-4 text-emerald-500" />
-              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">Voice Connected</p>
-                <p className="text-xs text-zinc-400 truncate">{voiceRoomName || 'Room'}</p>
-              </div>
-            )}
-          </div>
-          <div className={cn("flex items-center gap-1", isCollapsed ? "flex-col" : "")}>
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-              className={cn(
-                "p-1.5 rounded-lg transition-all cursor-pointer",
-                isMuted
-                  ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                  : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
-              )}
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleDeafen(); }}
-              className={cn(
-                "p-1.5 rounded-lg transition-all cursor-pointer",
-                isDeafened
-                  ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                  : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
-              )}
-              title={isDeafened ? 'Undeafen' : 'Deafen'}
-            >
-              {isDeafened ? <VolumeX className="w-3.5 h-3.5" /> : <Headphones className="w-3.5 h-3.5" />}
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                leaveVoice();
-              }}
-              className="p-1.5 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 transition-all cursor-pointer"
-              title="Disconnect"
-            >
-              <PhoneOff className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className={cn("border-t border-zinc-900 mt-auto", isCollapsed ? "p-4" : "p-6")}>
         {user && (
-          <div className={cn("flex items-center mb-4", isCollapsed ? "justify-center" : "gap-3")}>
-             <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center flex-shrink-0 border border-zinc-800">
+          <div className={cn(
+            "flex items-center mb-3 rounded-xl p-2 transition-all",
+            isVoiceConnected ? "border border-emerald-500/30 bg-emerald-500/5" : "",
+            isCollapsed ? "justify-center" : "gap-3"
+          )}>
+             <div className={cn(
+               "w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 border-2 transition-colors",
+               isVoiceConnected ? "border-emerald-500" : "border-zinc-800 bg-zinc-800"
+             )}>
                 {user.avatarConfig?.image ? (
                   <img
                     src={user.avatarConfig.image}
@@ -802,7 +749,7 @@ export function DashboardSidebar() {
                    <motion.div
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="overflow-hidden"
+                    className="overflow-hidden flex-1 min-w-0"
                    >
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.name}</p>
@@ -811,6 +758,70 @@ export function DashboardSidebar() {
                     <p className="text-xs text-zinc-500 truncate max-w-[120px]">{user.email}</p>
                    </motion.div>
               )}
+          </div>
+        )}
+
+        {/* ─── Voice Connected Bar (below user profile) ─── */}
+        {isVoiceConnected && voiceRoomId && (
+          <div className="mb-3">
+            <div
+              onClick={() => {
+                sessionStorage.setItem('room-join-intent', 'true');
+                router.push(`/dashboard/rooms/${voiceRoomId}`);
+              }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all mb-1.5",
+                isCollapsed ? "justify-center" : ""
+              )}
+            >
+              <div className="relative flex-shrink-0">
+                <Volume2 className="w-4 h-4 text-emerald-500" />
+                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              </div>
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">Voice Connected</p>
+                  <p className="text-xs text-zinc-400 truncate">{voiceRoomName || 'Room'}</p>
+                </div>
+              )}
+            </div>
+            <div className={cn("flex items-center gap-1", isCollapsed ? "flex-col" : "")}>
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                className={cn(
+                  "p-1.5 rounded-lg transition-all cursor-pointer",
+                  isMuted
+                    ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                )}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleDeafen(); }}
+                className={cn(
+                  "p-1.5 rounded-lg transition-all cursor-pointer",
+                  isDeafened
+                    ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                )}
+                title={isDeafened ? 'Undeafen' : 'Deafen'}
+              >
+                {isDeafened ? <VolumeX className="w-3.5 h-3.5" /> : <Headphones className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  leaveVoice();
+                  router.push("/dashboard/members");
+                }}
+                className="p-1.5 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 transition-all cursor-pointer"
+                title="Disconnect"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
