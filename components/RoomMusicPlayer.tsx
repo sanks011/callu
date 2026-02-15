@@ -345,15 +345,13 @@ export default function RoomMusicPlayer({ roomId, isOpen, onClose, onOpen }: Roo
     if (!videoId) { toast.error("Invalid YouTube link."); return; }
     setIsAdding(true);
     try {
-      const res = await fetch(
-        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-      );
+      const res = await fetch(`/api/youtube/oembed?v=${videoId}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       const song: Song = {
         videoId,
         title: data.title || "Unknown Title",
-        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+        thumbnail: data.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
         duration: "",
         addedBy: user._id,
         addedByName: user.name,
