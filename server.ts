@@ -67,15 +67,6 @@ connectDB().then(() => {
     attachments?: Array<{ key: string; url: string; name: string; type: string; size: number; expiresAt: string }>;
     createdAt: string;
   }>>();
-  const roomWatchState = new Map<string, {
-    videoId: string;
-    isPlaying: boolean;
-    time: number;
-    startTime?: number;
-    startedBy?: string;
-    type?: string;
-    updatedAt: number;
-  }>();
 
   const imagekitPublicKey = process.env.IMAGEKIT_PUBLIC_KEY;
   const imagekitPrivateKey = process.env.IMAGEKIT_PRIVATE_KEY;
@@ -171,7 +162,6 @@ connectDB().then(() => {
           if (roomParticipants.get(prevRoomId)!.size === 0) {
             roomParticipants.delete(prevRoomId);
             roomChatMessages.delete(prevRoomId);
-            roomWatchState.delete(prevRoomId);
           }
         }
         socket.to(prevRoomId).emit("room-user-left", { userId });
@@ -205,10 +195,6 @@ connectDB().then(() => {
       socket.emit("room-participants", { participants });
       const history = roomChatMessages.get(roomId) || [];
       socket.emit("room-chat-history", { roomId, messages: history });
-      const watchState = roomWatchState.get(roomId);
-      if (watchState) {
-        socket.emit("watch-state-sync", { roomId, state: watchState });
-      }
       emitRoomCount(roomId);
     });
 
@@ -224,7 +210,6 @@ connectDB().then(() => {
         if (roomParticipants.get(roomId)!.size === 0) {
           roomParticipants.delete(roomId);
           roomChatMessages.delete(roomId);
-          roomWatchState.delete(roomId);
         }
       }
       
@@ -301,64 +286,6 @@ connectDB().then(() => {
       roomChatMessages.set(message.roomId, history);
 
       io.in(message.roomId).emit("room-chat-message", normalized);
-    });
-
-    // ─── Watch Together (shared video) ──────────────────────────
-    socket.on("watch-state-request", (data: { roomId: string }) => {
-      if (!data.roomId) return;
-      const state = roomWatchState.get(data.roomId);
-      if (state) {
-        socket.emit("watch-state-sync", { roomId: data.roomId, state });
-      }
-    });
-
-    socket.on("watch-set", (data: { roomId: string; videoId: string; startTime?: number; startedBy?: string; type?: string }) => {
-      if (!data.roomId || !data.videoId) return;
-      const state = {
-        videoId: data.videoId,
-        isPlaying: true,
-        time: 0,
-        startTime: data.startTime || Date.now(),
-        startedBy: data.startedBy,
-        type: data.type,
-        updatedAt: Date.now(),
-      };
-      roomWatchState.set(data.roomId, state);
-      io.in(data.roomId).emit("watch-set", { roomId: data.roomId, videoId: data.videoId, startTime: state.startTime, startedBy: data.startedBy, type: data.type });
-    });
-
-    socket.on("watch-play", (data: { roomId: string; time?: number; timestamp?: number }) => {
-      if (!data.roomId) return;
-      const existing = roomWatchState.get(data.roomId);
-      if (existing) {
-        existing.isPlaying = true;
-        if (typeof data.time === "number") existing.time = data.time;
-        if (typeof data.timestamp === "number") existing.startTime = data.timestamp - (data.time || 0) * 1000;
-        existing.updatedAt = Date.now();
-      }
-      io.in(data.roomId).emit("watch-play", { roomId: data.roomId, time: data.time, timestamp: data.timestamp });
-    });
-
-    socket.on("watch-pause", (data: { roomId: string; time?: number; timestamp?: number }) => {
-      if (!data.roomId) return;
-      const existing = roomWatchState.get(data.roomId);
-      if (existing) {
-        existing.isPlaying = false;
-        if (typeof data.time === "number") existing.time = data.time;
-        existing.updatedAt = Date.now();
-      }
-      io.in(data.roomId).emit("watch-pause", { roomId: data.roomId, time: data.time, timestamp: data.timestamp });
-    });
-
-    socket.on("watch-seek", (data: { roomId: string; time: number; timestamp?: number }) => {
-      if (!data.roomId || typeof data.time !== "number") return;
-      const existing = roomWatchState.get(data.roomId);
-      if (existing) {
-        existing.time = data.time;
-        if (typeof data.timestamp === "number") existing.startTime = data.timestamp - data.time * 1000;
-        existing.updatedAt = Date.now();
-      }
-      io.in(data.roomId).emit("watch-seek", { roomId: data.roomId, time: data.time, timestamp: data.timestamp });
     });
 
     socket.on("rooms-counts-request", () => {
@@ -493,7 +420,6 @@ connectDB().then(() => {
           if (roomParticipants.get(currentRoom)!.size === 0) {
             roomParticipants.delete(currentRoom);
             roomChatMessages.delete(currentRoom);
-            roomWatchState.delete(currentRoom);
           }
         }
         userSockets.delete(userId);

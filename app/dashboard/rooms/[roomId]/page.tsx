@@ -9,7 +9,6 @@ import {
   Video, VideoOff, MonitorUp, MonitorOff,
   PictureInPicture2, LayoutGrid, Maximize2, Minimize2,
   Wrench, Music, MessageSquare, X, Paperclip, Send, File as FileIcon, Smile, ChevronDown,
-  Play, Pause, Link2,
 } from "lucide-react";
 import { useSocket } from "@/context/SocketContext";
 import { useRoomVoice } from "@/context/RoomVoiceContext";
@@ -103,34 +102,16 @@ export default function RoomVoiceChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showMicMenu, setShowMicMenu] = useState(false);
   const [showSpeakerMenu, setShowSpeakerMenu] = useState(false);
-  const [isWatchOpen, setIsWatchOpen] = useState(false);
-  const [watchLinkInput, setWatchLinkInput] = useState("");
-  const [watchVideoId, setWatchVideoId] = useState<string | null>(null);
-  const [watchIsPlaying, setWatchIsPlaying] = useState(false);
-  const [watchCurrentTime, setWatchCurrentTime] = useState(0);
-  const [watchDuration, setWatchDuration] = useState(0);
-  const [watchStartTime, setWatchStartTime] = useState<number>(0);
-  const [isWatchSynced, setIsWatchSynced] = useState(false);
-  const [activeWatch, setActiveWatch] = useState<{ roomId: string; videoId: string; startedBy: string } | null>(null);
-  const [showWatchJoinNotification, setShowWatchJoinNotification] = useState(false);
   const [isScreenShareFullscreen, setIsScreenShareFullscreen] = useState(false);
 
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const watchStateRef = useRef<{ time: number; isPlaying: boolean } | null>(null);
-  const watchContainerRef = useRef<HTMLDivElement | null>(null);
-  const videoElementRef = useRef<HTMLVideoElement | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastSyncTimeRef = useRef<number>(0);
-  const watchVideoTypeRef = useRef<string | null>(null);
-  const watchTimeTrackerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const watchIsSeeking = useRef(false);
   const spotlightVideoRef = useRef<HTMLVideoElement | null>(null);
   const spotlightContainerRef = useRef<HTMLDivElement | null>(null);
   const autoPiPRef = useRef(false);
   const canvasPiPVideoRef = useRef<HTMLVideoElement | null>(null);
   const canvasAnimFrameRef = useRef<number | null>(null);
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pipImgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const participantsRef = useRef(participants);
 
@@ -156,10 +137,6 @@ export default function RoomVoiceChatPage() {
   // ─── Cleanup on unmount ─────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (watchTimeTrackerRef.current) {
-        clearInterval(watchTimeTrackerRef.current);
-        watchTimeTrackerRef.current = null;
-      }
       if (isScreenShareFullscreen && document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
@@ -177,6 +154,42 @@ export default function RoomVoiceChatPage() {
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  // ─── Pre-warm canvas PiP stream on mount ─────────────────────────
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.pictureInPictureEnabled) return;
+    const pipVideoEl = canvasPiPVideoRef.current;
+    if (!pipVideoEl) return;
+
+    // Mark this element for automatic PiP (Chrome 80+) — bypasses user-gesture requirement
+    pipVideoEl.setAttribute("autopictureinpicture", "");
+
+    // Create the canvas once and keep it alive
+    const canvas = document.createElement("canvas");
+    canvas.width = 480;
+    canvas.height = 270;
+    pipCanvasRef.current = canvas;
+
+    // Seed a dark background so there's no white flash
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#18181b";
+      ctx.fillRect(0, 0, 480, 270);
+    }
+
+    const stream = (canvas as any).captureStream(24) as MediaStream;
+    pipVideoEl.srcObject = stream;
+    // play() silently — this primes the video element so requestPictureInPicture
+    // can be called later without needing a fresh user gesture.
+    pipVideoEl.play().catch(() => {});
+
+    return () => {
+      pipVideoEl.removeAttribute("autopictureinpicture");
+      pipVideoEl.pause();
+      pipVideoEl.srcObject = null;
+      pipCanvasRef.current = null;
     };
   }, []);
 
@@ -321,59 +334,53 @@ export default function RoomVoiceChatPage() {
     };
 
     // ── enter PiP ────────────────────────────────────────────────
+    // Always uses the canvas avatar approach — never the raw video stream.
+    // The canvas is pre-warmed on mount so this call is instant and doesn't
+    // need a fresh user gesture (the earlier .play() primes the element).
     const startPiP = async () => {
-      if (!document.pictureInPictureEnabled || document.pictureInPictureElement) return;
+      if (!document.pictureInPictureEnabled) return;
+      if (document.pictureInPictureElement) return;
 
-      // Prefer a real video stream if one exists
-      if (isVideoOnRef.current && localVideoElRef.current?.srcObject) {
+      const pipVideoEl = canvasPiPVideoRef.current;
+      if (!pipVideoEl) return;
+
+      // Re-use the persistent canvas or create one if not yet ready
+      const canvas = pipCanvasRef.current ?? (() => {
+        const c = document.createElement("canvas");
+        c.width = 480;
+        c.height = 270;
+        pipCanvasRef.current = c;
+        return c;
+      })();
+
+      // Start / restart the animated frame loop
+      stopCanvasAnim();
+      drawFrame(canvas);
+
+      // If the video isn't playing yet (edge case), re-prime it
+      if (!pipVideoEl.srcObject || pipVideoEl.paused) {
+        const stream = (canvas as any).captureStream(24) as MediaStream;
+        pipVideoEl.srcObject = stream;
         try {
-          await localVideoElRef.current.requestPictureInPicture();
-          autoPiPRef.current = true;
-          setIsInPiP(true);
-        } catch {}
-        return;
-      }
-      for (const el of videoElementsRef.current.values()) {
-        if (el?.srcObject) {
-          try {
-            await el.requestPictureInPicture();
-            autoPiPRef.current = true;
-            setIsInPiP(true);
-          } catch {}
+          await pipVideoEl.play();
+          await new Promise<void>((res) => {
+            if (pipVideoEl.readyState >= 1) { res(); return; }
+            pipVideoEl.addEventListener("loadedmetadata", () => res(), { once: true });
+            setTimeout(res, 400);
+          });
+        } catch {
+          stopCanvasAnim();
           return;
         }
       }
 
-      // No real video — build canvas PiP (voice-only mode, like Google Meet)
-      const pipVideoEl = canvasPiPVideoRef.current;
-      if (!pipVideoEl) return;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = 480;
-      canvas.height = 270;
-
-      stopCanvasAnim();
-      drawFrame(canvas);
-
-      const stream = (canvas as any).captureStream(24) as MediaStream;
-      pipVideoEl.srcObject = stream;
-
       try {
-        await pipVideoEl.play();
-        // Small wait so metadata is ready
-        await new Promise<void>((res) => {
-          if (pipVideoEl.readyState >= 1) { res(); return; }
-          pipVideoEl.addEventListener("loadedmetadata", () => res(), { once: true });
-          setTimeout(res, 600);
-        });
         await pipVideoEl.requestPictureInPicture();
         autoPiPRef.current = true;
         setIsInPiP(true);
       } catch (err) {
-        console.error("Canvas PiP failed:", err);
+        console.warn("Canvas PiP failed:", err);
         stopCanvasAnim();
-        pipVideoEl.pause();
-        pipVideoEl.srcObject = null;
       }
     };
 
@@ -400,9 +407,19 @@ export default function RoomVoiceChatPage() {
       }
     };
 
+    // window.blur fires when the OS window itself is minimized or focus moves
+    // to another application — this is more reliable than visibilitychange for
+    // the "minimize browser" case in Chrome.
+    const handleWindowBlur = () => { void startPiP(); };
+    const handleWindowFocus = () => { void stopPiP(); };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
       stopCanvasAnim();
     };
   }, []);
@@ -778,248 +795,13 @@ export default function RoomVoiceChatPage() {
   const formatChatTime = (value: string) =>
     new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const extractVideoEmbed = (input: string): { url: string; type: string } | null => {
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-
-    // YouTube - multiple formats
-    const youtubePatterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-      /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
-      /music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-    ];
-    for (const p of youtubePatterns) {
-      const m = trimmed.match(p);
-      if (m) return { url: `https://www.youtube.com/embed/${m[1]}?autoplay=1&controls=1&rel=0&fs=1`, type: "youtube" };
-    }
-
-    // Vimeo
-    const vimeoMatch = trimmed.match(/(?:vimeo\.com\/|vimeo\.com\/video\/)(\d+)/);
-    if (vimeoMatch) return { url: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`, type: "vimeo" };
-
-    // Direct video URLs
-    if (trimmed.match(/\.(mp4|webm|ogg|mov)($|\?)/i)) {
-      return { url: trimmed, type: "direct" };
-    }
-
-    // Dailymotion
-    const dmMatch = trimmed.match(/(?:dailymotion\.com\/video\/|dai\.ly\/)([a-z0-9]+)/i);
-    if (dmMatch) return { url: `https://www.dailymotion.com/embed/video/${dmMatch[1]}`, type: "dailymotion" };
-
-    // Twitch
-    const twitchMatch = trimmed.match(/twitch\.tv\/([a-zA-Z0-9_]+)/);
-    if (twitchMatch) return { url: `https://player.twitch.tv/?channel=${twitchMatch[1]}&parent=${typeof window !== "undefined" ? window.location.hostname : "localhost"}`, type: "twitch" };
-
-    // Generic iframe for other embeddable sites
-    if (trimmed.startsWith("http")) {
-      return { url: trimmed, type: "generic" };
-    }
-
-    return null;
-  };
-
-  const extractWatchVideoId = (input: string): string | null => {
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-      /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
-      /music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-    ];
-    for (const p of patterns) {
-      const m = trimmed.match(p);
-      if (m) return m[1];
-    }
-    return null;
-  };
-
-  const openWatchPanel = () => {
-    closeMusicPanel();
-    setIsChatOpen(false);
-    setShowToolsMenu(false);
-    setIsWatchOpen(true);
-    if (socket && roomId) socket.emit("watch-state-request", { roomId });
-  };
-
-  const closeWatchPanel = () => {
-    setIsWatchOpen(false);
-  };
-
-  const handleStartWatch = () => {
-    if (!socket || !roomId || !user) return;
-    const embed = extractVideoEmbed(watchLinkInput);
-    if (!embed) {
-      toast.error("Paste a valid video link (YouTube, Vimeo, Twitch, Dailymotion, or direct video URL)");
-      return;
-    }
-    const now = Date.now();
-    setWatchStartTime(now);
-    setWatchCurrentTime(0);
-    setWatchIsPlaying(true);
-    socket.emit("watch-set", { roomId, videoId: embed.url, type: embed.type, startTime: now, startedBy: user._id });
-    setWatchLinkInput("");
-    toast.success("Watch Together started! Others can join.");
-  };
-
-  const handleWatchPlay = () => {
-    if (!socket || !roomId) return;
-    const now = Date.now();
-    setWatchStartTime(now - watchCurrentTime * 1000);
-    setWatchIsPlaying(true);
-    socket.emit("watch-play", { roomId, time: watchCurrentTime, timestamp: now });
-  };
-
-  const handleWatchPause = () => {
-    if (!socket || !roomId) return;
-    setWatchIsPlaying(false);
-    socket.emit("watch-pause", { roomId, time: watchCurrentTime, timestamp: Date.now() });
-  };
-
-  const handleWatchSeek = (time: number) => {
-    if (!socket || !roomId) return;
-    const now = Date.now();
-    watchIsSeeking.current = true;
-    setWatchStartTime(now - time * 1000);
-    setWatchCurrentTime(time);
-    socket.emit("watch-seek", { roomId, time, timestamp: now });
-    setTimeout(() => {
-      watchIsSeeking.current = false;
-    }, 100);
-  };
-
-  useEffect(() => {
-    if (!socket || !roomId) return;
-
-    const onWatchSet = (data: { roomId: string; videoId: string; type?: string; startTime?: number; startedBy?: string }) => {
-      if (data.roomId !== roomId) return;
-      setWatchVideoId(data.videoId);
-      watchVideoTypeRef.current = data.type || null;
-      setWatchIsPlaying(true);
-      setWatchCurrentTime(0);
-      setWatchDuration(0);
-      setWatchStartTime(data.startTime || Date.now());
-      setIsWatchSynced(false);
-      setActiveWatch({ roomId: data.roomId, videoId: data.videoId, startedBy: data.startedBy || "someone" });
-      if (data.startedBy && data.startedBy !== user?._id) {
-        setShowWatchJoinNotification(true);
-      }
-      watchStateRef.current = { time: 0, isPlaying: true };
-    };
-
-    const onWatchPlay = (data: { roomId: string; time?: number; timestamp?: number }) => {
-      if (data.roomId !== roomId) return;
-      setWatchIsPlaying(true);
-      if (typeof data.time === "number" && typeof data.timestamp === "number") {
-        setWatchCurrentTime(data.time);
-        setWatchStartTime(data.timestamp - data.time * 1000);
-      }
-    };
-
-    const onWatchPause = (data: { roomId: string; time?: number; timestamp?: number }) => {
-      if (data.roomId !== roomId) return;
-      setWatchIsPlaying(false);
-      if (typeof data.time === "number") {
-        setWatchCurrentTime(data.time);
-      }
-    };
-
-    const onWatchSeek = (data: { roomId: string; time: number; timestamp?: number }) => {
-      if (data.roomId !== roomId) return;
-      setWatchCurrentTime(data.time);
-      if (typeof data.timestamp === "number") {
-        setWatchStartTime(data.timestamp - data.time * 1000);
-      }
-    };
-
-    const onWatchStateSync = (data: { roomId: string; state: { videoId: string; isPlaying: boolean; time: number; startTime?: number } }) => {
-      if (data.roomId !== roomId || !data.state?.videoId) return;
-      setWatchVideoId(data.state.videoId);
-      setWatchCurrentTime(data.state.time || 0);
-      setWatchIsPlaying(Boolean(data.state.isPlaying));
-      if (typeof data.state.startTime === "number") {
-        setWatchStartTime(data.state.startTime);
-      }
-      setIsWatchSynced(true);
-      watchStateRef.current = { time: data.state.time || 0, isPlaying: Boolean(data.state.isPlaying) };
-    };
-
-    socket.on("watch-set", onWatchSet);
-    socket.on("watch-play", onWatchPlay);
-    socket.on("watch-pause", onWatchPause);
-    socket.on("watch-seek", onWatchSeek);
-    socket.on("watch-state-sync", onWatchStateSync);
-
-    return () => {
-      socket.off("watch-set", onWatchSet);
-      socket.off("watch-play", onWatchPlay);
-      socket.off("watch-pause", onWatchPause);
-      socket.off("watch-seek", onWatchSeek);
-      socket.off("watch-state-sync", onWatchStateSync);
-    };
-  }, [socket, roomId, user?._id]);
-
-  // Sync video time across all users based on startTime
-  useEffect(() => {
-    if (!watchIsPlaying || !watchStartTime) {
-      if (watchTimeTrackerRef.current) {
-        clearInterval(watchTimeTrackerRef.current);
-        watchTimeTrackerRef.current = null;
-      }
-      return;
-    }
-
-    if (watchTimeTrackerRef.current) {
-      clearInterval(watchTimeTrackerRef.current);
-    }
-
-    watchTimeTrackerRef.current = setInterval(() => {
-      if (watchIsSeeking.current) return;
-      const now = Date.now();
-      const elapsedSeconds = (now - watchStartTime) / 1000;
-      setWatchCurrentTime(Math.max(0, elapsedSeconds));
-      lastSyncTimeRef.current = now;
-    }, 100);
-
-    return () => {
-      if (watchTimeTrackerRef.current) {
-        clearInterval(watchTimeTrackerRef.current);
-        watchTimeTrackerRef.current = null;
-      }
-    };
-  }, [watchIsPlaying, watchStartTime]);
-
-  // Update video element when currentTime or playback state changes
-  useEffect(() => {
-    if (!videoElementRef.current) return;
-    
-    const isDirectVideo = watchVideoId?.endsWith(".mp4") ||
-      watchVideoId?.endsWith(".webm") ||
-      watchVideoId?.endsWith(".ogg") ||
-      watchVideoId?.endsWith(".mov");
-
-    if (isDirectVideo) {
-      // ─── Direct video: UPDATE TIME ───
-      if (Math.abs(videoElementRef.current.currentTime - watchCurrentTime) > 0.3) {
-        videoElementRef.current.currentTime = watchCurrentTime;
-      }
-      // ─── Direct video: CONTROL PLAYBACK ───
-      if (watchIsPlaying && videoElementRef.current.paused) {
-        videoElementRef.current.play().catch((err) => {
-          console.warn("Could not play video:", err);
-        });
-      } else if (!watchIsPlaying && !videoElementRef.current.paused) {
-        videoElementRef.current.pause();
-      }
-    }
-  }, [watchIsPlaying, watchCurrentTime, watchVideoId]);
-
-  const emojiOptions = ["😀", "😂", "😍", "🥳", "🤝", "👍", "🔥", "😢", "😮", "🎉"]; 
+  const emojiOptions = ["😀", "😂", "😍", "🥳", "🤝", "👍", "🔥", "😢", "😮", "🎉"];
 
   const handleAddEmoji = (emoji: string) => {
     setChatInput((prev) => `${prev}${emoji}`);
     setShowEmojiPicker(false);
   };
+
 
   // ═══════════════════════════════════════════════════════════════════
   //  Toggle Camera
@@ -1992,21 +1774,6 @@ export default function RoomVoiceChatPage() {
                         <p className="text-[10px] text-zinc-500">YouTube music bot</p>
                       </div>
                     </button>
-                    <button
-                      onClick={() => {
-                        openWatchPanel();
-                        setShowToolsMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-all cursor-pointer"
-                    >
-                      <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                        <Link2 className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">Watch Together</p>
-                        <p className="text-[10px] text-zinc-500">Shared video room</p>
-                      </div>
-                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -2285,279 +2052,17 @@ export default function RoomVoiceChatPage() {
         )}
       </AnimatePresence>
 
-      {/* Watch Together Join Notification */}
-      <AnimatePresence>
-        {showWatchJoinNotification && activeWatch && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-24 left-1/2 -translate-x-1/2 z-[85] bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-4 rounded-2xl shadow-2xl border border-blue-400/50 max-w-sm"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Link2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Watch Together Started</p>
-                  <p className="text-xs text-blue-100">Someone is streaming a video</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowWatchJoinNotification(false);
-                  openWatchPanel();
-                }}
-                className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-50 transition flex-shrink-0"
-              >
-                Join
-              </button>
-              <button
-                onClick={() => setShowWatchJoinNotification(false)}
-                className="p-2 hover:bg-white/20 rounded-lg transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Watch Together Panel – Right Sidebar */}
-      <AnimatePresence>
-        {isWatchOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-[55] sm:hidden"
-              onClick={closeWatchPanel}
-            />
-            <motion.aside
-              initial={{ x: 480, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 480, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 260, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] sm:min-w-[280px] sm:max-w-[90vw] sm:resize-x sm:overflow-hidden bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 z-[60] flex flex-col min-h-0 shadow-2xl ring-1 ring-white/5"
-              ref={watchContainerRef}
-            >
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-zinc-800/70 flex items-center justify-between bg-gradient-to-b from-zinc-950/90 to-transparent">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                    <Link2 className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500">Watch Together</p>
-                    <h3 className="text-white font-semibold tracking-tight text-xs">Shared Video</h3>
-                  </div>
-                </div>
-                <button
-                  onClick={closeWatchPanel}
-                  className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                {watchVideoId ? (
-                  /* ─── Video Playing View ─── */
-                  <>
-                    {/* Video Container */}
-                    <div className="flex-1 min-h-0 bg-black overflow-hidden">
-                      {watchVideoId.endsWith(".mp4") ||
-                      watchVideoId.endsWith(".webm") ||
-                      watchVideoId.endsWith(".ogg") ||
-                      watchVideoId.endsWith(".mov") ? (
-                        <video
-                          ref={videoElementRef}
-                          src={watchVideoId}
-                          controls={false}
-                          autoPlay={watchIsPlaying}
-                          className="w-full h-full object-contain"
-                          style={{ aspectRatio: "16/9" }}
-                          onLoadedMetadata={(e) => setWatchDuration((e.target as HTMLVideoElement).duration)}
-                        />
-                      ) : (
-                        <div className="w-full h-full overflow-hidden">
-                          <iframe
-                            ref={iframeRef}
-                            src={watchVideoId}
-                            width="100%"
-                            height="100%"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            title="Watch Together Video"
-                            style={{ minHeight: "100%", minWidth: "100%" }}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Synced Time Display & Controls */}
-                    <div className="p-4 border-t border-zinc-800/70 bg-zinc-950/80 space-y-3">
-                      {/* Time Display */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                          <span>{Math.floor(watchCurrentTime / 60)}:{String(Math.floor(watchCurrentTime % 60)).padStart(2, "0")}</span>
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
-                            {isWatchSynced ? "✓ Synced" : "Syncing..."}
-                          </span>
-                          <span>{watchDuration ? `${Math.floor(watchDuration / 60)}:${String(Math.floor(watchDuration % 60)).padStart(2, "0")}` : "--:--"}</span>
-                        </div>
-
-                        {/* Progress Bar for Direct Videos */}
-                        {(watchVideoId.endsWith(".mp4") ||
-                          watchVideoId.endsWith(".webm") ||
-                          watchVideoId.endsWith(".ogg") ||
-                          watchVideoId.endsWith(".mov")) && (
-                          <div
-                            className="w-full h-1.5 bg-zinc-800/60 rounded-full cursor-pointer hover:bg-zinc-800 group"
-                            onMouseDown={(e) => {
-                              if (watchDuration <= 0) return;
-                              e.preventDefault();
-                              watchIsSeeking.current = true;
-
-                              const bar = e.currentTarget;
-                              const updateTime = (clientX: number) => {
-                                const rect = bar.getBoundingClientRect();
-                                const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-                                const time = (x / rect.width) * watchDuration;
-                                setWatchCurrentTime(time);
-                              };
-
-                              updateTime(e.clientX);
-
-                              const handleMouseMove = (ev: MouseEvent) => {
-                                updateTime(ev.clientX);
-                              };
-
-                              const handleMouseUp = (ev: MouseEvent) => {
-                                updateTime(ev.clientX);
-                                const rect = bar.getBoundingClientRect();
-                                const x = Math.max(0, Math.min(ev.clientX - rect.left, rect.width));
-                                const finalTime = (x / rect.width) * watchDuration;
-                                watchIsSeeking.current = false;
-                                handleWatchSeek(finalTime);
-                                document.removeEventListener("mousemove", handleMouseMove);
-                                document.removeEventListener("mouseup", handleMouseUp);
-                              };
-
-                              document.addEventListener("mousemove", handleMouseMove);
-                              document.addEventListener("mouseup", handleMouseUp);
-                            }}
-                          >
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all group-hover:from-blue-400 group-hover:to-blue-300"
-                              style={{
-                                width: watchDuration > 0 ? `${(watchCurrentTime / watchDuration) * 100}%` : "0%",
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Playback Controls */}
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => (watchIsPlaying ? handleWatchPause() : handleWatchPlay())}
-                          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 hover:border-blue-500/40 transition font-medium text-sm"
-                        >
-                          {watchIsPlaying ? (
-                            <>
-                              <Pause className="w-4 h-4" />
-                              <span className="hidden sm:inline">Pause</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-4 h-4" />
-                              <span className="hidden sm:inline">Play</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Change Video Input */}
-                      <div className="border-t border-zinc-800/50 pt-3">
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Change video</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={watchLinkInput}
-                            onChange={(e) => setWatchLinkInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleStartWatch();
-                              }
-                            }}
-                            placeholder="Paste any video link..."
-                            className="flex-1 px-3 py-2 rounded-lg border border-zinc-800/70 bg-zinc-900/60 text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-xs"
-                          />
-                          <button
-                            onClick={handleStartWatch}
-                            className="px-3 py-2 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition font-medium text-xs"
-                          >
-                            Load
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  /* ─── No Video State ─── */
-                  <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-4">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                      <Link2 className="w-8 h-8 text-blue-400" />
-                    </div>
-                    <div className="text-center space-y-1">
-                      <p className="text-sm font-semibold text-white">Share a video link</p>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        YouTube, Vimeo, Twitch, Dailymotion, or any video file
-                      </p>
-                    </div>
-                    <div className="w-full space-y-2">
-                      <input
-                        type="text"
-                        value={watchLinkInput}
-                        onChange={(e) => setWatchLinkInput(e.target.value)}
-                        placeholder="Paste video link here..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleStartWatch();
-                          }
-                        }}
-                        className="w-full px-3 py-2.5 rounded-lg border border-zinc-800/70 bg-zinc-900/60 text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-sm"
-                      />
-                      <button
-                        onClick={handleStartWatch}
-                        className="w-full px-3 py-2.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 hover:border-blue-500/40 transition font-medium text-sm"
-                      >
-                        Start Watching
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
       {/* Music Player Panel – now rendered persistently in dashboard layout */}
 
-      {/* Hidden video element used by canvas-based Picture-in-Picture (voice-only mode) */}
+      {/* Hidden video element used by canvas-based Picture-in-Picture.
+          autopictureinpicture (Chrome 80+) lets Chrome trigger PiP automatically
+          when the page is hidden — no user-gesture required after initial play(). */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={canvasPiPVideoRef}
         muted
         playsInline
+        disablePictureInPicture={false}
         style={{ position: "fixed", width: 1, height: 1, opacity: 0, pointerEvents: "none", top: 0, left: 0, zIndex: -1 }}
       />
 
