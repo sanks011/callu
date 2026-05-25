@@ -81,6 +81,17 @@ export default function RoomVoiceChatPage() {
     localStreamRef,
     localVideoTrackRef,
     localVideoStreamRef,
+    isPTTActive,
+    isPTTEnabled,
+    setIsPTTEnabled,
+    pttKeycode,
+    setPttKeycode,
+    isRecordingKeybind,
+    setIsRecordingKeybind,
+    userVolumes,
+    userMutes,
+    setUserVolume,
+    setUserMute,
   } = useRoomVoice();
 
   // ─── Local page state (dies on navigation — that's fine) ────────
@@ -470,14 +481,6 @@ export default function RoomVoiceChatPage() {
       leaveVoice();
       disconnectMusic(); // Stop music from old room
     }
-
-    // Refresh protection: no join-intent flag → kick to dashboard
-    const joinIntent = sessionStorage.getItem("room-join-intent");
-    if (!joinIntent) {
-      router.replace("/dashboard/members");
-      return;
-    }
-    sessionStorage.removeItem("room-join-intent");
 
     const init = async () => {
       const roomData = await fetchRoomDetails();
@@ -1328,6 +1331,43 @@ export default function RoomVoiceChatPage() {
                             </div>
                           )}
                         </div>
+                        {sp.userId !== user?._id && (
+                          <div className="flex items-center gap-2 bg-zinc-950/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-zinc-800/50 mr-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUserMute(sp.userId, !userMutes[sp.userId]);
+                              }}
+                              className={`p-1 rounded-md transition ${
+                                userMutes[sp.userId]
+                                  ? "text-red-400 hover:bg-red-500/10"
+                                  : "text-zinc-400 hover:bg-zinc-850 hover:text-white"
+                              }`}
+                              title={userMutes[sp.userId] ? "Unmute locally" : "Mute locally"}
+                            >
+                              {userMutes[sp.userId] ? (
+                                <VolumeX className="w-4 h-4" />
+                              ) : (
+                                <Volume2 className="w-4 h-4" />
+                              )}
+                            </button>
+                            
+                            <div className="w-20 flex items-center">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={Math.round((userVolumes[sp.userId] !== undefined ? userVolumes[sp.userId] : 1.0) * 100)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setUserVolume(sp.userId, parseInt(e.target.value, 10) / 100);
+                                }}
+                                className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer outline-none transition hover:bg-zinc-600"
+                                title={`Local Volume: ${Math.round((userVolumes[sp.userId] !== undefined ? userVolumes[sp.userId] : 1.0) * 100)}%`}
+                              />
+                            </div>
+                          </div>
+                        )}
                         {sp.isScreenSharing && (
                           <button
                             onClick={toggleScreenShareFullscreen}
@@ -1532,6 +1572,52 @@ export default function RoomVoiceChatPage() {
                       <MicOff className="w-3.5 h-3.5 text-red-400" />
                     </div>
                   )}
+
+                  {/* Local Mute Badge (when not hovered) */}
+                  {userMutes[participant.userId] && (
+                    <div className="absolute top-2 left-2 z-30 group-hover:opacity-0 transition-opacity duration-200 w-7 h-7 rounded-full bg-red-500/20 backdrop-blur-sm flex items-center justify-center border border-red-500/30">
+                      <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                    </div>
+                  )}
+
+                  {/* Local per-user Volume/Mute controls overlay (when hovered) */}
+                  {participant.userId !== user?._id && (
+                    <div className="absolute top-2 left-2 z-40 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-zinc-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-zinc-800/60 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUserMute(participant.userId, !userMutes[participant.userId]);
+                        }}
+                        className={`p-1 rounded-md transition ${
+                          userMutes[participant.userId]
+                            ? "text-red-400 hover:bg-red-500/10"
+                            : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                        }`}
+                        title={userMutes[participant.userId] ? "Unmute locally" : "Mute locally"}
+                      >
+                        {userMutes[participant.userId] ? (
+                          <VolumeX className="w-3.5 h-3.5" />
+                        ) : (
+                          <Volume2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      
+                      <div className="w-16 flex items-center">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={Math.round((userVolumes[participant.userId] !== undefined ? userVolumes[participant.userId] : 1.0) * 100)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setUserVolume(participant.userId, parseInt(e.target.value, 10) / 100);
+                          }}
+                          className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer outline-none transition hover:bg-zinc-600"
+                          title={`Local Volume: ${Math.round((userVolumes[participant.userId] !== undefined ? userVolumes[participant.userId] : 1.0) * 100)}%`}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -1591,6 +1677,29 @@ export default function RoomVoiceChatPage() {
                         </button>
                       ))
                     )}
+                  </div>
+                  {/* PTT Toggle */}
+                  <div className="border-t border-zinc-800/60 mt-1 pt-1">
+                    <button
+                      onClick={() => {
+                        setIsPTTEnabled(!isPTTEnabled);
+                        setShowMicMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs transition cursor-pointer ${
+                        isPTTEnabled
+                          ? "bg-emerald-500/10 text-emerald-300"
+                          : "text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200"
+                      }`}
+                    >
+                      <span>Push-to-Talk</span>
+                      <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full ${
+                        isPTTEnabled
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-zinc-800 text-zinc-500"
+                      }`}>
+                        {isPTTEnabled ? "ON" : "OFF"}
+                      </span>
+                    </button>
                   </div>
                 </div>
               )}

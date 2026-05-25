@@ -12,7 +12,15 @@ const makeCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 export async function POST(req: Request) {
   try {
-    const { email } = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("[OTP] JSON parse error - empty or invalid body");
+      return NextResponse.json({ message: "Invalid request body" }, { status: 400 });
+    }
+
+    const { email } = body;
     if (!email) {
       return NextResponse.json({ message: "Email is required" }, { status: 400 });
     }

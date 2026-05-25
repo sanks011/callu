@@ -41,6 +41,17 @@ interface RoomVoiceContextType {
   localStreamRef: MutableRefObject<MediaStream | null>;
   localVideoTrackRef: MutableRefObject<MediaStreamTrack | null>;
   localVideoStreamRef: MutableRefObject<MediaStream | null>;
+  isPTTActive: boolean;
+  isPTTEnabled: boolean;
+  setIsPTTEnabled: (val: boolean) => void;
+  pttKeycode: number;
+  setPttKeycode: (code: number) => void;
+  isRecordingKeybind: boolean;
+  setIsRecordingKeybind: (val: boolean) => void;
+  userVolumes: Record<string, number>;
+  userMutes: Record<string, boolean>;
+  setUserVolume: (userId: string, volume: number) => void;
+  setUserMute: (userId: string, muted: boolean) => void;
 }
 
 const RoomVoiceContext = createContext<RoomVoiceContextType>({
@@ -67,6 +78,17 @@ const RoomVoiceContext = createContext<RoomVoiceContextType>({
   localStreamRef: { current: null },
   localVideoTrackRef: { current: null },
   localVideoStreamRef: { current: null },
+  isPTTActive: false,
+  isPTTEnabled: false,
+  setIsPTTEnabled: () => {},
+  pttKeycode: 29,
+  setPttKeycode: () => {},
+  isRecordingKeybind: false,
+  setIsRecordingKeybind: () => {},
+  userVolumes: {},
+  userMutes: {},
+  setUserVolume: () => {},
+  setUserMute: () => {},
 });
 
 const ICE_CONFIG: RTCConfiguration = {
@@ -96,6 +118,28 @@ const ICE_CONFIG: RTCConfiguration = {
   iceTransportPolicy: "all",
 };
 
+const optimizeSDP = (sdp: string): string => {
+  if (!sdp) return sdp;
+  
+  // 1. Force stereo, FEC (Forward Error Correction), and high bitrate (128kbps) for Opus audio codec
+  let optimized = sdp.replace(
+    /a=fmtp:(\d+) useinbandfec=1/g,
+    "a=fmtp:$1 useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;minptime=10;ptime=20"
+  );
+  
+  // 2. Set interactive high priority for audio line
+  if (optimized.includes("a=mid:audio")) {
+    optimized = optimized.replace("a=mid:audio", "a=mid:audio\r\na=priority:high\r\na=extmap-allow-mixed");
+  }
+  
+  // 3. Set high priority for video line to ensure no packet drops or latency under heavy loads
+  if (optimized.includes("a=mid:video")) {
+    optimized = optimized.replace("a=mid:video", "a=mid:video\r\na=priority:high");
+  }
+  
+  return optimized;
+};
+
 export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
@@ -107,20 +151,50 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
   const [voiceRoomName, setVoiceRoomName] = useState<string | null>(null);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [isMuted, setIsMuted] = useState(false);
+  const [isPTTEnabled, setIsPTTEnabled] = useState(false);
+  const [pttKeycode, setPttKeycode] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("ptt-keycode");
+      if (saved) return parseInt(saved, 10);
+    }
+    return 29; // Default: Left Ctrl
+  });
+  const [isRecordingKeybind, setIsRecordingKeybind] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([]);
   const [availableSpeakers, setAvailableSpeakers] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicId, setSelectedMicId] = useState<string | null>(null);
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null);
 
+  const [userVolumes, setUserVolumes] = useState<Record<string, number>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("callu-user-volumes");
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
+
+  const [userMutes, setUserMutes] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("callu-user-mutes");
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
+
   // ─── Stable refs for handler closures (avoid stale captures) ────
   const voiceRoomIdRef = useRef<string | null>(null);
   const userRef = useRef(user);
   const socketRef = useRef(socket);
   const isMutedRef = useRef(false);
+  const isPTTEnabledRef = useRef(isPTTEnabled);
+  const pttKeycodeRef = useRef(pttKeycode);
+  const isRecordingKeybindRef = useRef(isRecordingKeybind);
   const isDeafenedRef = useRef(false);
   const isVoiceConnectedRef = useRef(false);
   const selectedSpeakerIdRef = useRef<string | null>(null);
+  const userVolumesRef = useRef<Record<string, number>>(userVolumes);
+  const userMutesRef = useRef<Record<string, boolean>>(userMutes);
 
   // Keep refs in sync
   useEffect(() => { userRef.current = user; }, [user]);
@@ -129,6 +203,57 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
   useEffect(() => { isDeafenedRef.current = isDeafened; }, [isDeafened]);
   useEffect(() => { isVoiceConnectedRef.current = isVoiceConnected; }, [isVoiceConnected]);
   useEffect(() => { selectedSpeakerIdRef.current = selectedSpeakerId; }, [selectedSpeakerId]);
+
+  useEffect(() => {
+    isPTTEnabledRef.current = isPTTEnabled;
+    // When PTT is toggled in-room, auto-mute/unmute accordingly
+    if (isVoiceConnectedRef.current && localStreamRef.current) {
+      if (isPTTEnabled && !isMutedRef.current) {
+        // PTT turned ON → mute the user (they must hold the key to talk)
+        localStreamRef.current.getAudioTracks().forEach(t => t.enabled = false);
+        peerConnectionsRef.current.forEach(pc => {
+          pc.getSenders().forEach(s => { if (s.track?.kind === "audio") s.track.enabled = false; });
+        });
+        setIsMuted(true);
+        socketRef.current?.emit("room-mute-toggle", { roomId: voiceRoomIdRef.current, userId: userRef.current?._id, isMuted: true });
+        setParticipants(prev => prev.map(p => p.userId === userRef.current?._id ? { ...p, isMuted: true } : p));
+      } else if (!isPTTEnabled && isMutedRef.current) {
+        // PTT turned OFF → unmute the user (back to normal open mic)
+        localStreamRef.current.getAudioTracks().forEach(t => t.enabled = true);
+        peerConnectionsRef.current.forEach(pc => {
+          pc.getSenders().forEach(s => { if (s.track?.kind === "audio") s.track.enabled = true; });
+        });
+        setIsMuted(false);
+        socketRef.current?.emit("room-mute-toggle", { roomId: voiceRoomIdRef.current, userId: userRef.current?._id, isMuted: false });
+        setParticipants(prev => prev.map(p => p.userId === userRef.current?._id ? { ...p, isMuted: false } : p));
+      }
+    }
+  }, [isPTTEnabled]);
+
+  useEffect(() => {
+    pttKeycodeRef.current = pttKeycode;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("ptt-keycode", pttKeycode.toString());
+    }
+  }, [pttKeycode]);
+
+  useEffect(() => {
+    isRecordingKeybindRef.current = isRecordingKeybind;
+  }, [isRecordingKeybind]);
+
+  useEffect(() => {
+    userVolumesRef.current = userVolumes;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("callu-user-volumes", JSON.stringify(userVolumes));
+    }
+  }, [userVolumes]);
+
+  useEffect(() => {
+    userMutesRef.current = userMutes;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("callu-user-mutes", JSON.stringify(userMutes));
+    }
+  }, [userMutes]);
 
   // ─── Voice infrastructure refs ──────────────────────────────────
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -182,7 +307,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         audioCtxRef.current.resume();
       }
       audioRefs.current.forEach((audio) => {
-        if (audio.muted && !isDeafenedRef.current) {
+        if (!isDeafenedRef.current) {
           audio.muted = false;
           audio.play().catch(() => {});
         }
@@ -263,6 +388,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       applySpeakerToAudio(audio, selectedSpeakerId).catch(() => {});
     });
   }, [selectedSpeakerId]);
+
   //  Cleanup (must be declared before effects that use it)
   // ═══════════════════════════════════════════════════════════════
 
@@ -274,7 +400,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     // Stop speaking detection
     speakingFlags.current.forEach(flag => { flag.running = false; });
     speakingFlags.current.clear();
-    animationFrames.current.forEach((frameId) => cancelAnimationFrame(frameId));
+    animationFrames.current.forEach((frameId) => clearTimeout(frameId));
     animationFrames.current.clear();
 
     // Clear analyzers
@@ -486,15 +612,13 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         flag.running = false;
         return;
       }
-      const frameId = requestAnimationFrame(checkAudioLevel);
-      animationFrames.current.set(userId, frameId);
+      const frameId = setTimeout(checkAudioLevel, 100);
+      animationFrames.current.set(userId, frameId as any);
     };
     checkAudioLevel();
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  WebRTC peer connection management
-  // ═══════════════════════════════════════════════════════════════
+  // ─── WebRTC peer connection management ─────────────────────────
 
   const createPeerConnection = async (targetUserId: string, initiator: boolean): Promise<RTCPeerConnection | undefined> => {
     const currentStream = localStreamRef.current;
@@ -527,7 +651,6 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
         console.log(`✅ Connected with ${targetUserId}`);
-        // Set maximum bitrate for video and audio
         pc.getSenders().forEach((sender) => {
           if (sender.track?.kind === "video") {
             console.log(`📹 Video encoder allocated: max 5 Mbps to ${targetUserId}`);
@@ -542,38 +665,28 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
 
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
-        // Allocate maximum bandwidth when ICE is connected
         const allocateBandwidth = async () => {
           try {
             const senders = pc.getSenders();
             for (const sender of senders) {
               if (!sender.track) continue;
               const params = sender.getParameters();
-              
-              // Initialize encodings array if not present
               if (!params.encodings) {
                 params.encodings = [{}];
               }
-              
               if (sender.track.kind === "video") {
-                // Allocate 5 Mbps for video (screen share gets priority)
                 params.encodings[0].maxBitrate = 5_000_000;
-                params.encodings[0].maxFramerate = 60; // Support up to 60 FPS
+                params.encodings[0].maxFramerate = 60;
               } else if (sender.track.kind === "audio") {
-                // Allocate 500 kbps for audio (high quality)
                 params.encodings[0].maxBitrate = 500_000;
               }
-              
-              await sender.setParameters(params).catch(() => {
-                // Ignore errors in case the params setter is not supported
-              });
+              await sender.setParameters(params).catch(() => {});
             }
           } catch (err) {
             console.error(`Failed to allocate bandwidth for ${targetUserId}:`, err);
           }
         };
-        
-        allocateBandwidth();
+        void allocateBandwidth();
       } else if (pc.iceConnectionState === "failed") {
         console.error(`❌ ICE failed with ${targetUserId}`);
       }
@@ -608,7 +721,13 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
           applySpeakerToAudio(audio, speakerId).catch(() => {});
         }
         audio.srcObject = remoteStream;
-        if (isDeafenedRef.current) audio.muted = true;
+        
+        // Initialize with user's local volume and mute preference
+        const savedVolume = userVolumesRef.current[targetUserId] ?? 1.0;
+        const savedMuted = userMutesRef.current[targetUserId] ?? false;
+        audio.volume = savedVolume;
+        audio.muted = isDeafenedRef.current || savedMuted;
+
         audio.play().catch(err => console.error(`Error playing audio for ${targetUserId}:`, err));
         setupRemoteAudioAnalyzer(remoteStream, targetUserId);
       } else if (event.track.kind === "video") {
@@ -627,11 +746,12 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       try {
         if (pc.signalingState !== "stable") return pc;
         const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        const optimizedSDPText = optimizeSDP(offer.sdp || "");
+        await pc.setLocalDescription({ type: "offer", sdp: optimizedSDPText });
         s.emit("room-signal", {
           roomId: rid,
           targetUserId,
-          signal: { type: "offer", sdp: offer },
+          signal: { type: "offer", sdp: { type: "offer", sdp: optimizedSDPText } },
         });
       } catch (error) {
         console.error("Failed to create offer:", error);
@@ -670,7 +790,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
   };
 
   // ═══════════════════════════════════════════════════════════════
-  //  Socket event handlers (all use refs for stable closures)
+  //  Socket event handlers
   // ═══════════════════════════════════════════════════════════════
 
   const handleSignalImpl = async (data: { fromUserId: string; signal: any }) => {
@@ -689,14 +809,16 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
             console.log(`[${fromUserId}] Not stable (${pc.signalingState}), rolling back`);
             await pc.setLocalDescription({ type: "rollback" });
           }
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          const remoteSdp = typeof signal.sdp === "string" ? signal.sdp : signal.sdp.sdp;
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: remoteSdp }));
           await flushIceCandidates(fromUserId, pc);
           const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
+          const optimizedAnswerSDP = optimizeSDP(answer.sdp || "");
+          await pc.setLocalDescription({ type: "answer", sdp: optimizedAnswerSDP });
           s.emit("room-signal", {
             roomId: rid,
             targetUserId: fromUserId,
-            signal: { type: "answer", sdp: answer },
+            signal: { type: "answer", sdp: { type: "answer", sdp: optimizedAnswerSDP } },
           });
         } catch (error) {
           console.error(`❌ Error handling offer from ${fromUserId}:`, error);
@@ -706,10 +828,15 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       if (pc) {
         try {
           if (pc.signalingState !== "have-local-offer") return;
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          const remoteSdp = typeof signal.sdp === "string" ? signal.sdp : signal.sdp.sdp;
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: remoteSdp }));
           await flushIceCandidates(fromUserId, pc);
-        } catch (error) {
-          console.error(`Error handling answer from ${fromUserId}:`, error);
+        } catch (error: any) {
+          if (pc.signalingState === "stable") {
+            console.log(`[RTCPeerConnection] Ignored duplicate/concurrent answer since state is stable.`);
+          } else {
+            console.error(`Error handling answer from ${fromUserId}:`, error);
+          }
         }
       }
     } else if (signal.type === "ice-candidate") {
@@ -737,10 +864,9 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         ];
     setParticipants(allParticipants);
 
-    // Create answerer connections for existing participants
     data.participants.forEach((participant) => {
       if (participant.userId !== u?._id && !peerConnectionsRef.current.has(participant.userId)) {
-        createPeerConnection(participant.userId, false);
+        void createPeerConnection(participant.userId, false);
       }
     });
   };
@@ -763,7 +889,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
 
     if (data.userId !== u?._id) {
       playJoinSound();
-      createPeerConnection(data.userId, true);
+      void createPeerConnection(data.userId, true);
     }
   };
 
@@ -792,7 +918,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     videoElementsRef.current.delete(data.userId);
     iceCandidateBuffers.current.delete(data.userId);
 
-    // Stop speaking detection for this user
+    // Stop speaking detection
     const flag = speakingFlags.current.get(data.userId);
     if (flag) {
       flag.running = false;
@@ -800,7 +926,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     }
     const frameId = animationFrames.current.get(data.userId);
     if (frameId !== undefined) {
-      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
       animationFrames.current.delete(data.userId);
     }
   };
@@ -858,10 +984,22 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
   // ═══════════════════════════════════════════════════════════════
 
   const joinVoice = async (roomId: string, roomName: string): Promise<boolean> => {
-    if (isVoiceConnectedRef.current) return false;
+    console.log("[RoomVoiceContext] joinVoice called for room:", roomId, roomName);
+
+    if (isVoiceConnectedRef.current) {
+      if (voiceRoomIdRef.current === roomId) {
+        console.log("[RoomVoiceContext] Already connected to this voice room.");
+        return true;
+      }
+      console.warn("[RoomVoiceContext] Already connected to a different voice room. Leaving first.");
+      leaveVoice();
+    }
     const s = socketRef.current;
     const u = userRef.current;
-    if (!s || !u) return false;
+    if (!s || !u) {
+      console.error("[RoomVoiceContext] Cannot join voice: socket or user is null!", { socket: !!s, user: !!u });
+      return false;
+    }
 
     // Join room in DB
     try {
@@ -872,18 +1010,16 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       });
     } catch (error) {
       console.error("Failed to join room in DB:", error);
-      // Continue anyway — Socket.IO handles the real-time connection
     }
 
     // Get microphone
     const stream = await setupLocalAudio();
     if (!stream) return false;
 
-    // Set refs BEFORE registering listeners (handlers read these refs)
+    // Set refs BEFORE registering listeners
     voiceRoomIdRef.current = roomId;
 
     // Register socket listeners BEFORE emitting join-room
-    // so we catch the room-participants response
     registerSocketListeners(s);
 
     // Join socket room
@@ -912,18 +1048,13 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     const u = userRef.current;
     const rid = voiceRoomIdRef.current;
 
-    // Unregister socket listeners
     if (s) unregisterSocketListeners(s);
-
-    // Cleanup all WebRTC connections
     cleanupConnections();
 
-    // Notify server
     if (s && rid && u) {
       s.emit("leave-room", { roomId: rid, userId: u._id });
     }
 
-    // DB leave (fire-and-forget)
     if (u && rid) {
       fetch("/api/rooms/leave", {
         method: "POST",
@@ -933,7 +1064,6 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       }).catch(() => {});
     }
 
-    // Clear all state
     voiceRoomIdRef.current = null;
     isVoiceConnectedRef.current = false;
     setVoiceRoomId(null);
@@ -942,6 +1072,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     setParticipants([]);
     setIsMuted(false);
     setIsDeafened(false);
+    setIsPTTEnabled(false);
     setIsInRoom(false);
     setCurrentRoomId(null);
     setCurrentRoomName(null);
@@ -951,12 +1082,25 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     const currentStream = localStreamRef.current;
     if (currentStream) {
       const newMuted = !isMutedRef.current;
+      
+      if (!newMuted && isPTTEnabledRef.current) {
+        setIsPTTEnabled(false);
+      }
+
       currentStream.getAudioTracks().forEach((track) => {
         track.enabled = !newMuted;
       });
+
+      peerConnectionsRef.current.forEach((pc) => {
+        pc.getSenders().forEach((sender) => {
+          if (sender.track && sender.track.kind === "audio") {
+            sender.track.enabled = !newMuted;
+          }
+        });
+      });
+
       setIsMuted(newMuted);
 
-      // Broadcast mute state to other participants
       const s = socketRef.current;
       const u = userRef.current;
       const rid = voiceRoomIdRef.current;
@@ -964,20 +1108,185 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         s.emit("room-mute-toggle", { roomId: rid, userId: u._id, isMuted: newMuted });
       }
 
-      // Update own participant entry
       if (u) {
         setParticipants(prev => prev.map(p => p.userId === u._id ? { ...p, isMuted: newMuted } : p));
       }
     }
   };
 
+  const setUserVolume = (userId: string, volume: number) => {
+    setUserVolumes((prev) => ({ ...prev, [userId]: volume }));
+    const audio = audioRefs.current.get(userId);
+    if (audio) {
+      audio.volume = volume;
+    }
+  };
+
+  const setUserMute = (userId: string, muted: boolean) => {
+    setUserMutes((prev) => ({ ...prev, [userId]: muted }));
+    const audio = audioRefs.current.get(userId);
+    if (audio) {
+      audio.muted = isDeafenedRef.current || muted;
+    }
+  };
+
   const toggleDeafen = () => {
     const newDeafened = !isDeafenedRef.current;
-    audioRefs.current.forEach((audio) => {
-      audio.muted = newDeafened;
+    audioRefs.current.forEach((audio, userId) => {
+      const locallyMuted = userMutesRef.current[userId] ?? false;
+      audio.muted = newDeafened || locallyMuted;
     });
     setIsDeafened(newDeafened);
   };
+
+  const [isPTTActive, setIsPTTActive] = useState(false);
+
+  useEffect(() => {
+    console.log("[PTT-EFFECT] useEffect mounting. window.electron:", !!(window as any).electron);
+
+    let isKeyDown = false;
+
+    const setMuteState = (muted: boolean) => {
+      const stream = localStreamRef.current;
+      if (!stream) {
+        console.log("[PTT] setMuteState: no stream, aborting");
+        return;
+      }
+
+      console.log("[PTT] setMuteState:", muted, "| tracks:", stream.getAudioTracks().length, "| peers:", peerConnectionsRef.current.size);
+
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = !muted;
+      });
+
+      peerConnectionsRef.current.forEach((pc) => {
+        pc.getSenders().forEach((sender) => {
+          if (sender.track && sender.track.kind === "audio") {
+            sender.track.enabled = !muted;
+          }
+        });
+      });
+
+      setIsMuted(muted);
+
+      const s = socketRef.current;
+      const u = userRef.current;
+      const rid = voiceRoomIdRef.current;
+      if (s && u && rid) {
+        s.emit("room-mute-toggle", { roomId: rid, userId: u._id, isMuted: muted });
+      }
+      if (u) {
+        setParticipants(prev => prev.map(p => p.userId === u._id ? { ...p, isMuted: muted } : p));
+      }
+    };
+
+    const handleKeyDown = (data: { keycode: number }) => {
+      console.log("[PTT] keydown received:", data.keycode, "| pttKeycodeRef:", pttKeycodeRef.current, "| isPTTEnabled:", isPTTEnabledRef.current, "| isKeyDown:", isKeyDown, "| isRecording:", isRecordingKeybindRef.current, "| stream:", !!localStreamRef.current);
+      if (isRecordingKeybindRef.current) {
+        setPttKeycode(data.keycode);
+        setIsRecordingKeybind(false);
+        return;
+      }
+
+      if (!isPTTEnabledRef.current) return;
+      if (data.keycode === pttKeycodeRef.current) {
+        if (!isKeyDown) {
+          isKeyDown = true;
+          setIsPTTActive(true);
+          console.log("[PTT] UNMUTING via setMuteState(false)");
+          setMuteState(false);
+        }
+      }
+    };
+
+    const handleKeyUp = (data: { keycode: number }) => {
+      if (isRecordingKeybindRef.current) return;
+      if (!isPTTEnabledRef.current) return;
+      if (data.keycode === pttKeycodeRef.current) {
+        isKeyDown = false;
+        setIsPTTActive(false);
+        console.log("[PTT] RE-MUTING via setMuteState(true)");
+        setMuteState(true);
+      }
+    };
+
+    // Register via Electron IPC (global hook from uIOhook) if available
+    let removeDown: (() => void) | undefined;
+    let removeUp: (() => void) | undefined;
+    if (typeof window !== "undefined" && (window as any).electron) {
+      removeDown = (window as any).electron.on("ptt-keydown", handleKeyDown);
+      removeUp = (window as any).electron.on("ptt-keyup", handleKeyUp);
+      console.log("[PTT-EFFECT] Registered IPC listeners for ptt-keydown / ptt-keyup");
+    }
+
+    // BROWSER FALLBACK: listen to browser-level keyboard events for PTT
+    const BROWSER_CODE_TO_SCANCODE: Record<string, number> = {
+      "Space": 57, "ControlLeft": 29, "ControlRight": 3613,
+      "ShiftLeft": 42, "ShiftRight": 54, "AltLeft": 56, "AltRight": 3640,
+      "KeyA": 30, "KeyB": 48, "KeyC": 46, "KeyD": 32, "KeyE": 18,
+      "KeyF": 33, "KeyG": 34, "KeyH": 35, "KeyI": 23, "KeyJ": 36,
+      "KeyK": 37, "KeyL": 38, "KeyM": 50, "KeyN": 49, "KeyO": 24,
+      "KeyP": 25, "KeyQ": 16, "KeyR": 19, "KeyS": 31, "KeyT": 20,
+      "KeyU": 22, "KeyV": 47, "KeyW": 17, "KeyX": 45, "KeyY": 21,
+      "KeyZ": 44, "Digit0": 11, "Digit1": 2, "Digit2": 3, "Digit3": 4,
+      "Digit4": 5, "Digit5": 6, "Digit6": 7, "Digit7": 8, "Digit8": 9,
+      "Digit9": 10, "F1": 59, "F2": 60, "F3": 61, "F4": 62,
+      "F5": 63, "F6": 64, "F7": 65, "F8": 66, "F9": 67, "F10": 68,
+      "F11": 87, "F12": 88, "Tab": 15, "CapsLock": 58, "Escape": 1,
+      "Backquote": 41, "Minus": 12, "Equal": 13, "Backspace": 14,
+      "BracketLeft": 26, "BracketRight": 27, "Backslash": 43,
+      "Semicolon": 39, "Quote": 40, "Enter": 28, "Comma": 51,
+      "Period": 52, "Slash": 53, "ArrowUp": 57416, "ArrowDown": 57424,
+      "ArrowLeft": 57419, "ArrowRight": 57421,
+    };
+
+    const handleBrowserKeyDownForPTT = (e: KeyboardEvent) => {
+      const codeToUse = BROWSER_CODE_TO_SCANCODE[e.code];
+      if (codeToUse === undefined) return;
+
+      if (isRecordingKeybindRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleKeyDown({ keycode: codeToUse });
+        return;
+      }
+
+      if (!isRecordingKeybindRef.current && isPTTEnabledRef.current && codeToUse === pttKeycodeRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleKeyDown({ keycode: codeToUse });
+      }
+    };
+
+    const handleBrowserKeyUpForPTT = (e: KeyboardEvent) => {
+      const codeToUse = BROWSER_CODE_TO_SCANCODE[e.code];
+      if (codeToUse === undefined) return;
+
+      if (isRecordingKeybindRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (!isRecordingKeybindRef.current && isPTTEnabledRef.current && codeToUse === pttKeycodeRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleKeyUp({ keycode: codeToUse });
+      }
+    };
+
+    window.addEventListener("keydown", handleBrowserKeyDownForPTT, { capture: true });
+    window.addEventListener("keyup", handleBrowserKeyUpForPTT, { capture: true });
+    console.log("[PTT-EFFECT] Registered browser fallback keydown/keyup listeners");
+
+    return () => {
+      console.log("[PTT-EFFECT] useEffect cleanup - removing all PTT listeners");
+      removeDown?.();
+      removeUp?.();
+      window.removeEventListener("keydown", handleBrowserKeyDownForPTT, { capture: true });
+      window.removeEventListener("keyup", handleBrowserKeyUpForPTT, { capture: true });
+    };
+  }, []);
 
   return (
     <RoomVoiceContext.Provider
@@ -1005,6 +1314,17 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         localStreamRef,
         localVideoTrackRef,
         localVideoStreamRef,
+        isPTTActive,
+        isPTTEnabled,
+        setIsPTTEnabled,
+        pttKeycode,
+        setPttKeycode,
+        isRecordingKeybind,
+        setIsRecordingKeybind,
+        userVolumes,
+        userMutes,
+        setUserVolume,
+        setUserMute,
       }}
     >
       {children}
