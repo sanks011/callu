@@ -8,10 +8,11 @@ import DownloadButton from "@/components/DownloadButton";
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
-  const [githubStars, setGithubStars] = useState<number | null>(null);
+  const [appStars, setAppStars] = useState<number | null>(null);
+  const [webStars, setWebStars] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchStars = async () => {
+    const fetchAppStars = async () => {
       try {
         const res = await fetch("https://api.github.com/repos/Sahnik0/callu", {
           headers: { Accept: "application/vnd.github.v3+json" },
@@ -19,14 +20,34 @@ export default function Home() {
         } as RequestInit);
         if (res.ok) {
           const data = await res.json();
-          setGithubStars(data.stargazers_count);
+          setAppStars(data.stargazers_count);
         }
       } catch (e) {
-        console.error("Failed to fetch GitHub stars", e);
+        console.error("Failed to fetch App GitHub stars", e);
       }
     };
-    fetchStars();
-    const interval = setInterval(fetchStars, 60000);
+    
+    const fetchWebStars = async () => {
+      try {
+        const res = await fetch("https://api.github.com/repos/sanks011/callu", {
+          headers: { Accept: "application/vnd.github.v3+json" },
+          next: { revalidate: 60 },
+        } as RequestInit);
+        if (res.ok) {
+          const data = await res.json();
+          setWebStars(data.stargazers_count);
+        }
+      } catch (e) {
+        console.error("Failed to fetch Web GitHub stars", e);
+      }
+    };
+
+    fetchAppStars();
+    fetchWebStars();
+    const interval = setInterval(() => {
+      fetchAppStars();
+      fetchWebStars();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,12 +65,45 @@ export default function Home() {
            <h1 className="text-3xl font-black tracking-tighter text-white">CALLU</h1>
            <div className="w-2 h-2 bg-emerald-500 rounded-full mt-3 transition-all duration-500 group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(16,185,129,0.8)]"></div>
         </div>
-        <button
-          onClick={() => setShowLogin(true)}
-          className="px-5 py-2 text-sm font-medium text-zinc-300 hover:text-white border border-zinc-700/70 hover:border-zinc-500 rounded-full transition-all duration-200 hover:bg-zinc-800/60 backdrop-blur-sm"
-        >
-          Login
-        </button>
+        
+        <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-5 mr-2">
+            <a
+              href="https://github.com/Sahnik0/callu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-1.5 text-zinc-400 hover:text-white transition-all text-sm font-medium"
+            >
+              <Github size={16} />
+              <span>App</span>
+              <div className="flex items-center gap-0.5 ml-1 text-zinc-500 group-hover:text-emerald-400">
+                <Star size={12} className="fill-current" />
+                <span className="tabular-nums">{appStars !== null ? appStars : '-'}</span>
+              </div>
+            </a>
+            
+            <a
+              href="https://github.com/sanks011/callu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-1.5 text-zinc-400 hover:text-white transition-all text-sm font-medium"
+            >
+              <Globe size={16} />
+              <span>Web</span>
+              <div className="flex items-center gap-0.5 ml-1 text-zinc-500 group-hover:text-emerald-400">
+                <Star size={12} className="fill-current" />
+                <span className="tabular-nums">{webStars !== null ? webStars : '-'}</span>
+              </div>
+            </a>
+          </div>
+
+          <button
+            onClick={() => setShowLogin(true)}
+            className="px-5 py-2 text-sm font-medium text-zinc-300 hover:text-white border border-zinc-700/70 hover:border-zinc-500 rounded-full transition-all duration-200 hover:bg-zinc-800/60 backdrop-blur-sm"
+          >
+            Login
+          </button>
+        </div>
       </nav>
 
       <div className="relative z-10 flex flex-col items-center justify-center px-4 text-center w-full max-w-5xl pt-16 md:pt-24 pb-12">
@@ -60,29 +114,10 @@ export default function Home() {
           The curated community <br className="hidden md:block" /> for <span className="font-playfair bg-gradient-to-b from-emerald-300 via-emerald-100 to-white bg-clip-text text-transparent italic px-2 py-1 box-decoration-clone leading-tight">meaningful connections.</span>
         </h2>
 
-        <p className="hero-fade-2 font-dm text-lg md:text-xl text-zinc-400/90 max-w-2xl mb-8 font-light leading-relaxed">
+        <p className="hero-fade-2 font-dm text-lg md:text-xl text-zinc-400/90 max-w-2xl mb-12 font-light leading-relaxed">
             A private space for professionals, creators, and visionaries. 
             Connect through voice, video, and serendipity.
         </p>
-        
-        {/* GitHub Stars Badge — floats gently */}
-        <a
-          href="https://github.com/Sahnik0/callu"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hero-fade-3 badge-float group inline-flex items-center gap-2 mb-8 px-4 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/80 hover:border-zinc-700 transition-all duration-300 cursor-pointer"
-        >
-          <Star size={13} className="text-zinc-400 fill-zinc-400 group-hover:text-emerald-400 group-hover:fill-emerald-400 group-hover:scale-110 transition-all duration-300" />
-          <span className="text-zinc-300 text-[13px] font-medium tracking-wide group-hover:text-white transition-colors">
-            {githubStars !== null ? (
-              <span className="tabular-nums">{githubStars.toLocaleString()}</span>
-            ) : (
-              <span className="inline-block w-6 h-3 bg-zinc-800 rounded animate-pulse align-middle" />
-            )}
-            {" "}stars on GitHub
-          </span>
-          <Github size={13} className="text-zinc-500 group-hover:text-white transition-colors" />
-        </a>
 
         {/* CTA: Primary */}
         <div className="hero-fade-4 mb-6">
@@ -121,84 +156,70 @@ export default function Home() {
         </div>
 
         {/* Bento Grid Teaser */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-12 gap-6 w-full max-w-5xl px-4 pb-24">
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-4xl px-4 pb-24 text-left">
              
-             {/* Card 1: Exclusive Access (Large) */}
-             <div className="group col-span-1 md:col-span-7 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 hover:border-emerald-500/40 rounded-4xl py-6 pr-6 pl-8 hover:bg-zinc-800/60 transition-all duration-700 hover:-translate-y-2 hover:-rotate-1 hover:shadow-[0_12px_40px_rgba(16,185,129,0.08)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] cursor-default relative overflow-hidden min-h-[260px] md:min-h-[280px] flex flex-col justify-between text-left transform-gpu">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -mr-16 -mt-16 transition-opacity opacity-50 group-hover:opacity-100" />
-                <div className="z-10">
-                   <div className="w-12 h-12 bg-zinc-800/80 rounded-2xl flex items-center justify-center mb-5 border border-zinc-700/50 group-hover:border-emerald-500/30 transition-colors">
-                     <Lock className="text-zinc-400 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300" size={20} />
+             {/* Card 1: Exclusive Access */}
+             <div className="group relative overflow-hidden bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-zinc-900/50 hover:border-emerald-500/30 hover:shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
+                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                   <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-3">
+                       <div className="p-2.5 rounded-xl bg-zinc-800/50 border border-zinc-700/50 group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-300">
+                         <Lock className="text-zinc-400 group-hover:text-emerald-400 transition-all duration-300 group-hover:scale-110" size={18} />
+                       </div>
+                       <h3 className="text-lg md:text-xl font-medium text-zinc-100 group-hover:text-white transition-colors">Exclusive Access</h3>
+                     </div>
+                     <p className="text-zinc-400 text-sm font-light leading-relaxed group-hover:text-zinc-300 transition-colors">
+                       Manual curation ensures a high-trust environment. We accept less than 1% of applicants.
+                     </p>
                    </div>
-                   <h3 className="text-2xl font-medium text-white mb-3">Exclusive Access</h3>
-                   <p className="text-zinc-400 text-base font-light max-w-sm">Our community is manually curated. We accept less than 1% of applicants to ensure meaningful connections and a high-trust environment.</p>
-                </div>
-                {/* Visual Ornament */}
-                <div className="absolute bottom-0 right-0 translate-x-12 translate-y-12 opacity-30 group-hover:opacity-50 transition-all duration-700">
-                    <div className="w-48 h-48 border border-zinc-700 rounded-full flex items-center justify-center">
-                        <div className="w-32 h-32 border border-zinc-600 rounded-full flex items-center justify-center">
-                           <div className="w-16 h-16 bg-zinc-800 rounded-full"></div>
-                        </div>
-                    </div>
-                </div>
              </div>
              
-             {/* Card 2: Instant Connect (Small) */}
-             <div className="group col-span-1 md:col-span-5 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 hover:border-emerald-500/40 rounded-4xl p-6 hover:bg-zinc-800/60 transition-all duration-700 hover:translate-x-2 hover:-translate-y-4 hover:rotate-2 hover:shadow-[0_12px_40px_rgba(16,185,129,0.08)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] cursor-default relative overflow-hidden min-h-[260px] md:min-h-[280px] flex flex-col justify-between md:translate-y-12 transform-gpu">
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-[70px] -ml-10 -mb-10 transition-opacity opacity-50 group-hover:opacity-100" />
-                <div className="z-10">
-                   <div className="w-12 h-12 bg-zinc-800/80 rounded-2xl flex items-center justify-center mb-5 border border-zinc-700/50 group-hover:border-emerald-500/30 transition-colors">
-                      <Zap className="text-zinc-400 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300" size={20} />
+             {/* Card 2: Instant Connect */}
+             <div className="group relative overflow-hidden bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-zinc-900/50 hover:border-emerald-500/30 hover:shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
+                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                   <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-3">
+                       <div className="p-2.5 rounded-xl bg-zinc-800/50 border border-zinc-700/50 group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-300">
+                         <Zap className="text-zinc-400 group-hover:text-emerald-400 transition-all duration-300 group-hover:scale-110" size={18} />
+                       </div>
+                       <h3 className="text-lg md:text-xl font-medium text-zinc-100 group-hover:text-white transition-colors">Instant Connect</h3>
+                     </div>
+                     <p className="text-zinc-400 text-sm font-light leading-relaxed group-hover:text-zinc-300 transition-colors">
+                       See who&apos;s online and jump right into serendipitous conversations effortlessly.
+                     </p>
                    </div>
-                   <h3 className="text-2xl font-medium text-white mb-2">Instant Connect</h3>
-                   <p className="text-zinc-400 text-base font-light leading-relaxed">See who&apos;s online and jump right into serendipitous conversations.</p>
-                </div>
-                <div className="flex gap-2 mt-3 ml-1">
-                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_1.5s_ease-in-out_infinite]"></div>
-                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/50 animate-[pulse_2s_ease-in-out_infinite]"></div>
-                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20"></div>
-                </div>
              </div>
 
-             {/* Card 3: Privacy (Small) */}
-             <div className="group col-span-1 md:col-span-4 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 hover:border-emerald-500/40 rounded-4xl p-6 hover:bg-zinc-800/60 transition-all duration-700 hover:-translate-x-2 hover:-translate-y-2 hover:-rotate-1 hover:shadow-[0_12px_40px_rgba(16,185,129,0.08)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] cursor-default relative overflow-hidden min-h-[220px] md:min-h-[240px] flex flex-col justify-between z-10 md:-translate-y-8 transform-gpu">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-[70px] -mr-10 -mt-10 transition-opacity opacity-50 group-hover:opacity-100" />
-                <div className="z-10">
-                   <div className="w-12 h-12 bg-zinc-800/80 rounded-2xl flex items-center justify-center mb-5 border border-zinc-700/50 group-hover:border-emerald-500/30 transition-colors">
-                      <Shield className="text-zinc-400 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300" size={20} />
+             {/* Card 3: Privacy */}
+             <div className="group relative overflow-hidden bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-zinc-900/50 hover:border-emerald-500/30 hover:shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
+                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                   <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-3">
+                       <div className="p-2.5 rounded-xl bg-zinc-800/50 border border-zinc-700/50 group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-300">
+                         <Shield className="text-zinc-400 group-hover:text-emerald-400 transition-all duration-300 group-hover:scale-110" size={18} />
+                       </div>
+                       <h3 className="text-lg md:text-xl font-medium text-zinc-100 group-hover:text-white transition-colors">Private by Design</h3>
+                     </div>
+                     <p className="text-zinc-400 text-sm font-light leading-relaxed group-hover:text-zinc-300 transition-colors">
+                       Your data is yours. Experience end-to-end encrypted signals and complete privacy.
+                     </p>
                    </div>
-                   <h3 className="text-2xl font-medium text-white mb-2">Private by Design</h3>
-                   <p className="text-zinc-400 text-base font-light leading-relaxed">Your data is yours. <br/> End-to-end encrypted signals.</p>
-                </div>
-                {/* Visual Ornament */}
-                <div className="mt-4 flex gap-1.5 items-center opacity-50">
-                    <div className="h-1 w-8 bg-zinc-700 rounded-full"></div>
-                    <div className="h-1 w-4 bg-zinc-700 rounded-full"></div>
-                    <div className="h-1 w-12 bg-zinc-700 rounded-full"></div>
-                </div>
              </div>
 
-             {/* Card 4: Crystal Voice (Large) */}
-             <div className="group col-span-1 md:col-span-8 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 hover:border-emerald-500/40 rounded-4xl p-6 md:p-8 hover:bg-zinc-800/60 transition-all duration-700 hover:scale-[1.02] hover:rotate-1 hover:shadow-[0_16px_40px_rgba(16,185,129,0.08)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] cursor-default relative overflow-hidden min-h-[220px] md:min-h-[240px] flex flex-col justify-between transform-gpu">
-                <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] transition-opacity opacity-50 group-hover:opacity-100" />
-                <div className="relative z-10">
-                   <div className="w-12 h-12 bg-zinc-800/80 rounded-2xl flex items-center justify-center mb-5 border border-zinc-700/50 group-hover:border-emerald-500/30 transition-colors">
-                     <Mic className="text-zinc-400 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300" size={20} />
-                   </div>
-                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                       <div>
-                           <h3 className="text-2xl font-medium text-white mb-3">Crystal Clear Audio</h3>
-                           <p className="text-zinc-400 text-base font-light max-w-md">Experience high-fidelity voice conversations that feel like you&apos;re in the same room. No lag, no noise, just pure connection.</p>
+             {/* Card 4: Crystal Voice */}
+             <div className="group relative overflow-hidden bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-zinc-900/50 hover:border-emerald-500/30 hover:shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
+                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                   <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-3">
+                       <div className="p-2.5 rounded-xl bg-zinc-800/50 border border-zinc-700/50 group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-300">
+                         <Mic className="text-zinc-400 group-hover:text-emerald-400 transition-all duration-300 group-hover:scale-110" size={18} />
                        </div>
-                       
-                       {/* Audio Wave Visual */}
-                       <div className="flex items-center gap-1 h-10 mb-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                            {[40, 60, 30, 80, 50, 90, 40, 60, 30, 50, 40, 80, 60, 30, 40].map((h, i) => (
-                                <div key={i} className="w-1 bg-emerald-500/80 rounded-full animate-[pulse_1s_ease-in-out_infinite]" style={{ height: `${h}%`, animationDelay: `${i * 0.1}s` }} />
-                            ))}
-                       </div>
+                       <h3 className="text-lg md:text-xl font-medium text-zinc-100 group-hover:text-white transition-colors">Crystal Clear Audio</h3>
+                     </div>
+                     <p className="text-zinc-400 text-sm font-light leading-relaxed group-hover:text-zinc-300 transition-colors">
+                       Experience high-fidelity, lag-free voice conversations that feel natural.
+                     </p>
                    </div>
-                </div>
              </div>
 
         </div>
