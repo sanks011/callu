@@ -6,6 +6,8 @@ on:
       - opened
       - reopened
       - ready_for_review
+      - edited
+      - synchronize
 
 permissions:
   contents: read
@@ -19,8 +21,15 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = (context.payload.pull_request.title || '').trim();
-            const body = (context.payload.pull_request.body || '').trim();
+            // Fetch current PR data to avoid stale payload on re-runs
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            
+            const title = (pr.title || '').trim();
+            const body = (pr.body || '').trim();
 
             const titlePattern = /^(feat|fix|docs|refactor|test|chore|ci|build|perf|revert)(\([^)]+\))?:\s.+$/i;
             const requiredSections = [
