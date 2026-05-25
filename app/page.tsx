@@ -1,14 +1,34 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
-import StyledButton from "@/components/StyledButton";
-import MemberButton from "@/components/MemberButton";
-import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity } from "lucide-react";
+import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity, Star, Globe, Monitor } from "lucide-react";
 import { Footer } from "@/components/ui/modem-animated-footer";
+import DownloadButton from "@/components/DownloadButton";
 
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [githubStars, setGithubStars] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchStars = async () => {
+      try {
+        const res = await fetch("https://api.github.com/repos/Sahnik0/callu", {
+          headers: { Accept: "application/vnd.github.v3+json" },
+          next: { revalidate: 60 },
+        } as RequestInit);
+        if (res.ok) {
+          const data = await res.json();
+          setGithubStars(data.stargazers_count);
+        }
+      } catch (e) {
+        console.error("Failed to fetch GitHub stars", e);
+      }
+    };
+    fetchStars();
+    const interval = setInterval(fetchStars, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <main className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col items-center">
@@ -23,21 +43,75 @@ export default function Home() {
            <h1 className="text-3xl font-black tracking-tighter text-white">CALLU</h1>
            <div className="w-2 h-2 bg-emerald-500 rounded-full mt-3"></div>
         </div>
-        <MemberButton onClick={() => setShowLogin(true)} />
+        <button
+          onClick={() => setShowLogin(true)}
+          className="px-5 py-2 text-sm font-medium text-zinc-300 hover:text-white border border-zinc-700/70 hover:border-zinc-500 rounded-full transition-all duration-200 hover:bg-zinc-800/60 backdrop-blur-sm"
+        >
+          Login
+        </button>
       </nav>
 
-      <div className="relative z-10 flex flex-col items-center justify-start min-h-[70vh] px-4 text-center w-full max-w-5xl pt-5">
+      <div className="relative z-10 flex flex-col items-center justify-center px-4 text-center w-full max-w-5xl pt-2">
 
-        <h2 className="text-6xl md:text-8xl font-medium tracking-tighter mb-10 max-w-5xl text-pretty leading-[0.95] select-none">
+        <h2 className="hero-fade-1 text-5xl md:text-7xl font-medium tracking-tighter mb-5 max-w-5xl text-pretty leading-[0.95] select-none">
           The curated community <br className="hidden md:block" /> for <span className="font-playfair bg-gradient-to-b from-white via-zinc-200 to-zinc-600 bg-clip-text text-transparent italic px-2 py-1 box-decoration-clone">meaningful connections.</span>
         </h2>
 
-        <p className="font-dm text-xl md:text-2xl text-zinc-400/90 max-w-2xl mb-14 font-light leading-relaxed">
+        <p className="hero-fade-2 font-dm text-lg md:text-xl text-zinc-400/90 max-w-2xl mb-6 font-light leading-relaxed">
             A private space for professionals, creators, and visionaries. 
             Connect through voice, video, and serendipity.
         </p>
         
-        <StyledButton onClick={() => setShowApply(true)} />
+        {/* GitHub Stars Badge — floats gently */}
+        <a
+          href="https://github.com/Sahnik0/callu"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hero-fade-3 badge-float group inline-flex items-center gap-2 mb-5 px-4 py-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/25 hover:border-amber-400/60 transition-all duration-300 cursor-pointer"
+        >
+          <Star size={13} className="text-amber-400 fill-amber-400 group-hover:scale-125 transition-transform duration-300" />
+          <span className="text-amber-300 text-sm font-medium tracking-wide">
+            {githubStars !== null ? (
+              <span className="tabular-nums">{githubStars.toLocaleString()}</span>
+            ) : (
+              <span className="inline-block w-6 h-3.5 bg-amber-900/40 rounded animate-pulse align-middle" />
+            )}
+            {" "}stars on GitHub
+          </span>
+          <Github size={13} className="text-amber-400/60 group-hover:text-amber-300 transition-colors" />
+        </a>
+
+        {/* CTA: Primary */}
+        <div className="hero-fade-4 mb-4">
+          <button
+            onClick={() => setShowLogin(true)}
+            className="group relative flex items-center gap-3 px-7 py-3.5 rounded-full border border-emerald-500/25 bg-zinc-950/80 hover:border-emerald-500/60 hover:bg-zinc-900/90 text-white font-medium text-sm transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(16,185,129,0.12)] active:scale-[0.97] backdrop-blur-sm"
+          >
+            {/* Live dot */}
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            Try Browser Version
+            {/* Arrow */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all duration-300">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-px w-10 bg-zinc-800" />
+          <span className="text-zinc-700 text-[10px] uppercase tracking-[0.15em] font-medium">or get the desktop app</span>
+          <div className="h-px w-10 bg-zinc-800" />
+        </div>
+
+        {/* Download buttons */}
+        <div className="hero-fade-4 flex items-center justify-center gap-3 mb-6">
+          <DownloadButton href="/Callu-Setup-2.0.0.exe" os="windows" />
+          <DownloadButton href="/callu-desktop_2.0.0_amd64.deb" os="linux" />
+        </div>
 
         {/* Bento Grid Teaser */}
         <div className="mt-24 grid grid-cols-1 md:grid-cols-6 gap-6 w-full max-w-6xl px-4 pb-24">
