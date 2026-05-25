@@ -168,3 +168,5 @@ The project ships with a `render.yaml` for one-click deployment on [Render](http
 ## Contributing
 
 Contributions are welcome! Please open an issue or pull request for bug fixes, improvements, or new features. Make sure `npm run lint` passes before submitting.
+
+Pull requests should follow the template in `.github/pull_request_template.md`, include a `Fixes #<issue-number>` reference, and use a conventional PR title such as `fix: short summary`.
