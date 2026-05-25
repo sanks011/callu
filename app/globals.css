@@ -91,7 +91,7 @@ html.lenis, html.lenis body { height: auto; }
   top: 10%;
   width: 38vw;
   height: 38vw;
-  background: radial-gradient(circle at 70% 70%, rgba(161, 161, 170, 0.15), rgba(161, 161, 170, 0.01) 60%);
+  background: radial-gradient(circle at 70% 70%, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0.02) 60%);
   animation-duration: 18s, 9s;
 }
 
@@ -148,11 +148,3 @@ html.lenis, html.lenis body { height: auto; }
 .hero-fade-3 { animation: fade-up 0.6s 0.3s ease forwards; opacity: 0; }
 .hero-fade-4 { animation: fade-up 0.6s 0.45s ease forwards; opacity: 0; }
 .hero-fade-5 { animation: fade-up 0.6s 0.6s ease forwards; opacity: 0; }
-
-@keyframes sweep {
-  0% { left: -100%; }
-  100% { left: 200%; }
-}
-.animate-sweep {
-  animation: sweep 1s ease-in-out;
-}
