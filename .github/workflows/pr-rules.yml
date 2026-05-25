@@ -76,33 +76,12 @@ jobs:
             }
 
             const issueNumber = relatedIssueSection?.[2];
-            core.notice(`Validated PR title and body. Linked issue #${issueNumber}.`);
-
-      - name: Approve validated pull request
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const reviews = await github.rest.pulls.listReviews({
+            core.notice(`✅ PR validation passed! Title and body are correctly formatted. Linked issue #${issueNumber}.`);
+            
+            // Add a success comment to the PR
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-              per_page: 100,
-            });
-
-            const alreadyApproved = reviews.data.some(
-              (review) =>
-                review.user?.login === 'github-actions[bot]' && review.state === 'APPROVED'
-            );
-
-            if (alreadyApproved) {
-              core.notice('Pull request is already approved by github-actions[bot].');
-              return;
-            }
-
-            await github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-              event: 'APPROVE',
-              body: 'PR title and description validated successfully.',
+              issue_number: context.payload.pull_request.number,
+              body: '✅ **PR Validation Passed**\n\nYour PR title and description meet all requirements:\n- Title follows conventional format\n- All required sections are present\n- Issue is properly linked (#' + issueNumber + ')',
             });
