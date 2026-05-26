@@ -32,6 +32,19 @@ var UserSchema = new mongoose_1.Schema({
         type: Object,
         default: {},
     },
+    mobile: {
+        type: String,
+        default: null,
+    },
+    // Keybinds — synced across desktop and web
+    pttKeycode: {
+        type: Number,
+        default: 29, // Left Ctrl
+    },
+    muteKeycode: {
+        type: Number,
+        default: 0, // 0 = not set
+    },
 }, { timestamps: true });
 var User = mongoose_1.models.User || (0, mongoose_1.model)('User', UserSchema);
 exports.default = User;
