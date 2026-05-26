@@ -13,7 +13,8 @@ import {
   LogOut,
   Trash2,
   Save,
-  Mic
+  Mic,
+  AtSign
 } from "lucide-react";
 import { useRoomVoice } from "@/context/RoomVoiceContext";
 import { toast } from "sonner";
@@ -77,7 +78,6 @@ export default function SettingsPage() {
   // Profile form state
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
-  const [mobile, setMobile] = useState(user?.mobile || "");
 
   // Premium Avatar configuration selection
   const [selectedAvatar, setSelectedAvatar] = useState(user?.avatarConfig?.image || "");
@@ -159,7 +159,6 @@ export default function SettingsPage() {
     if (user) {
       setName(user.name);
       setEmail(user.email);
-      setMobile(user.mobile || "");
       setSelectedAvatar(user.avatarConfig?.image || "");
       setSelectedColor(user.avatarConfig?.color || "#27272a");
     }
@@ -189,9 +188,8 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           token, 
-          name, 
+          name,
           email, 
-          mobile, 
           avatarConfig: { image: selectedAvatar, color: selectedColor } 
         }),
       });
@@ -377,6 +375,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
+
             <div>
               <label className="block text-sm text-zinc-400 mb-2">Email Address</label>
               <div className="relative">
@@ -391,19 +390,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-zinc-400 mb-2">Mobile Number</label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-                <input
-                  type="tel"
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  className="w-full bg-zinc-900/60 border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-                  placeholder="+1 (555) 000-0000"
-                />
-              </div>
-            </div>
 
             <button
               onClick={handleSaveProfile}

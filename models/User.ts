@@ -1,19 +1,21 @@
-import mongoose, { Schema, model, models } from 'mongoose';
+import { Schema, model, models } from 'mongoose';
 
 const UserSchema = new Schema({
   name: {
     type: String,
     required: true,
+    trim: true,
   },
   email: {
     type: String,
     required: true,
     unique: true,
+    trim: true,
+    lowercase: true,
   },
-  mobile: {
+  passwordHash: {
     type: String,
-    required: true,
-    unique: true,
+    select: false,
   },
   status: {
     type: String,
@@ -25,14 +27,10 @@ const UserSchema = new Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
-  isOnline: {
-    type: Boolean,
-    default: false
-  },
   avatarConfig: {
-    type: Object, // Store avatar configuration (color, generic id)
-    default: {} 
-  }
+    type: Object,
+    default: {},
+  },
 }, { timestamps: true });
 
 const User = models.User || model('User', UserSchema);

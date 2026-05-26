@@ -1,311 +1,424 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { X, ArrowRight, Loader2, ShieldCheck, Lock } from "lucide-react";
+import React, { useState } from "react";
+import { X, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
-export default function ApplyModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({ name: "", email: "", mobile: "" });
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+/* ── Shake keyframe ── */
+const shakeStyle = `
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  15%{transform:translateX(-6px)}
+  30%{transform:translateX(6px)}
+  45%{transform:translateX(-5px)}
+  60%{transform:translateX(5px)}
+  75%{transform:translateX(-3px)}
+  90%{transform:translateX(3px)}
+}
+.shake { animation: shake 0.45s ease; }
+`;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch("/api/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccess(true);
-      } else {
-        toast.error(data.message);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+/* ── Password strength ── */
+function getStrength(pw: string) {
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return score;
+}
+const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"];
+const strengthColor = ["", "#ef4444", "#f97316", "#eab308", "#22c55e"];
 
-  if (success) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-            <div className="bg-zinc-950/90 border border-zinc-800/50 p-10 rounded-[2rem] max-w-md text-center backdrop-blur-2xl shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] -mr-16 -mt-16 pointer-events-none" />
-                <div className="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                    <ShieldCheck size={32} />
-                </div>
-                <h3 className="text-3xl text-white font-playfair italic mb-3">Application Received</h3>
-                <p className="text-zinc-400 mb-8 font-dm leading-relaxed">Your application has been logged in our secure node. We manually review every profile to ensure community quality. Expect an encrypted email soon.</p>
-                <button onClick={onClose} className="bg-white text-black px-10 py-3 rounded-full font-medium hover:scale-105 transition-all text-sm uppercase tracking-wide cursor-pointer shadow-lg hover:shadow-white/20">
-                    Return to Home
-                </button>
-            </div>
-        </div>
-    )
-  }
-
+/* ── Shared modal shell ── */
+function ModalShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="w-full max-w-lg bg-zinc-950/80 border border-zinc-800/50 rounded-[2rem] overflow-hidden relative backdrop-blur-2xl shadow-2xl">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50" />
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-emerald-900/10 rounded-full blur-[80px] -mr-20 -mb-20 pointer-events-none" />
-        
-        <button onClick={onClose} className="absolute top-5 right-5 p-2 text-zinc-500 hover:text-white transition-colors cursor-pointer z-10 bg-zinc-900/50 rounded-full hover:bg-zinc-800">
-          <X size={18} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <style>{shakeStyle}</style>
+      <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800/70 rounded-3xl relative backdrop-blur-3xl shadow-2xl overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-900/20 rounded-full blur-[80px] -mr-16 -mt-16 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-zinc-800/20 rounded-full blur-[60px] -ml-10 -mb-10 pointer-events-none" />
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white transition-all duration-200 cursor-pointer bg-zinc-900/60 rounded-full hover:bg-zinc-800 z-20 hover:rotate-90"
+        >
+          <X size={16} />
         </button>
-
-        <div className="p-8 sm:p-10">
-            <div className="flex items-center gap-3 mb-2">
-                <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-emerald-500 text-xs font-bold uppercase tracking-widest">Open Registration</span>
-            </div>
-            <h2 className="text-4xl font-medium text-white mb-2 font-playfair italic">Apply to Join</h2>
-            <p className="text-zinc-500 mb-8 font-dm text-sm">Access is exclusive and manually approved. Join the top 1%.</p>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider ml-1">Identity</label>
-                    <input 
-                        required
-                        className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
-                        placeholder="Full Name"
-                        value={formData.name}
-                        onChange={e => setFormData({...formData, name: e.target.value})}
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider ml-1">Contact Signal</label>
-                    <div className="grid grid-cols-2 gap-4">
-                        <input 
-                            required
-                            type="email"
-                            className="col-span-2 sm:col-span-1 w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
-                            placeholder="Email Address"
-                            value={formData.email}
-                            onChange={e => setFormData({...formData, email: e.target.value})}
-                        />
-                        <input 
-                            required
-                            className="col-span-2 sm:col-span-1 w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm"
-                            placeholder="Mobile Number"
-                            value={formData.mobile}
-                            onChange={e => setFormData({...formData, mobile: e.target.value})}
-                        />
-                    </div>
-                </div>
-
-                <div className="pt-2">
-                    <button 
-                        disabled={loading}
-                        type="submit" 
-                        className="group w-full bg-gradient-to-b from-white to-zinc-200 text-black font-bold text-lg py-4 rounded-xl hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
-                    >
-                        {loading ? <Loader2 className="animate-spin" /> : "Initiate Application"}
-                        {!loading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
-                    </button>
-                    <p className="text-center text-[10px] text-zinc-600 mt-4 font-mono uppercase">Encrypted • Secure • Private</p>
-                </div>
-            </form>
-        </div>
+        {children}
       </div>
     </div>
   );
 }
 
-export function LoginModal({ onClose }: { onClose: () => void }) {
-    const { login, requestLoginCode, verifyLoginCode } = useAuth();
-    const router = useRouter();
-    const [email, setEmail] = useState("");
-    const [adminId, setAdminId] = useState("");
-    const [password, setPassword] = useState("");
-    const [code, setCode] = useState("");
-    const [isAdminMode, setIsAdminMode] = useState(false);
-    const [step, setStep] = useState<"email" | "code">("email");
-    const [loading, setLoading] = useState(false);
-    const [resendCooldown, setResendCooldown] = useState(0);
+/* ── Tab bar ── */
+function TabBar({ tab, setTab }: { tab: "signin" | "signup"; setTab: (t: "signin" | "signup") => void }) {
+  return (
+    <div className="flex p-1 bg-zinc-900/80 rounded-xl border border-zinc-800/50 mb-7">
+      {(["signin", "signup"] as const).map((t) => (
+        <button
+          key={t}
+          onClick={() => setTab(t)}
+          className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all duration-300 cursor-pointer ${tab === t
+              ? "bg-zinc-800 text-white shadow-lg shadow-black/30 scale-[1.02]"
+              : "text-zinc-500 hover:text-zinc-300"
+            }`}
+        >
+          {t === "signin" ? "Sign In" : "Sign Up"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-    useEffect(() => {
-        if (resendCooldown <= 0) return;
-        const timer = setTimeout(() => {
-            setResendCooldown((prev) => prev - 1);
-        }, 1000);
-        return () => clearTimeout(timer);
-    }, [resendCooldown]);
+/* ── Floating label input ── */
+function FloatingInput({
+  label, value, onChange, type = "text", placeholder, autoComplete, required, rightSlot,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  type?: string; placeholder?: string; autoComplete?: string;
+  required?: boolean; rightSlot?: React.ReactNode;
+}) {
+  const [focused, setFocused] = useState(false);
+  const active = focused || value.length > 0;
+  return (
+    <div className="relative">
+      <label
+        className={`absolute left-4 pointer-events-none transition-all duration-200 z-10 ${active
+            ? "top-2 translate-y-0 text-[10px] text-emerald-400 font-bold uppercase tracking-widest"
+            : "top-1/2 -translate-y-1/2 text-sm text-zinc-600"
+          }`}
+      >
+        {label}
+      </label>
+      <input
+        required={required}
+        type={type}
+        autoComplete={autoComplete}
+        placeholder={focused ? placeholder : ""}
+        value={value}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full bg-zinc-900/60 border rounded-xl px-4 pt-6 pb-2.5 ${rightSlot ? "pr-12" : "pr-4"} text-zinc-200 text-sm focus:outline-none transition-all duration-200 placeholder:text-zinc-700 ${focused
+            ? "border-emerald-500/60 bg-zinc-900 ring-2 ring-emerald-500/15 shadow-[0_0_16px_rgba(16,185,129,0.08)]"
+            : "border-zinc-800/80 hover:border-zinc-700"
+          }`}
+      />
+      {rightSlot && (
+        <div className="absolute right-3.5 top-1/2 -translate-y-1/2">{rightSlot}</div>
+      )}
+    </div>
+  );
+}
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        const success = await login(isAdminMode ? adminId : email, password, isAdminMode);
-        setLoading(false);
-        if (success) {
-            const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
-            if (stored.role === "admin") router.push("/admin");
-            else router.push("/dashboard");
-            onClose();
+/* ── Sign-In form ── */
+function SignInForm({ onSuccess }: { onSuccess: () => void }) {
+  const { login } = useAuth();
+  const router = useRouter();
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [shaking, setShaking] = useState(false);
+
+  const triggerShake = () => {
+    setShaking(true);
+    setTimeout(() => setShaking(false), 500);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const success = await login(identifier, password, false);
+    setLoading(false);
+    if (success) {
+      const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
+      if (stored.role === "admin") router.push("/admin");
+      else router.push("/dashboard");
+      onSuccess();
+    } else {
+      triggerShake();
+    }
+  };
+
+  return (
+    <form onSubmit={handleLogin} className={`space-y-4 animate-in slide-in-from-left-3 duration-300 ${shaking ? "shake" : ""}`}>
+      <FloatingInput
+        label="Email"
+        value={identifier}
+        onChange={setIdentifier}
+        type="email"
+        placeholder="you@example.com"
+        autoComplete="email"
+        required
+      />
+      <FloatingInput
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        type={showPw ? "text" : "password"}
+        placeholder="••••••••"
+        autoComplete="current-password"
+        required
+        rightSlot={
+          <button type="button" onClick={() => setShowPw((v) => !v)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+            {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
         }
-    };
+      />
+      <button
+        disabled={loading}
+        type="submit"
+        className="w-full mt-2 bg-white text-black font-bold py-3.5 rounded-xl hover:bg-zinc-100 active:scale-[0.97] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_24px_rgba(255,255,255,0.08)] hover:shadow-[0_0_32px_rgba(255,255,255,0.15)] text-sm tracking-wide disabled:opacity-60 relative overflow-hidden group"
+      >
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out pointer-events-none" />
+        {loading ? (
+          <Loader2 className="animate-spin" size={18} />
+        ) : (
+          <>
+            Sign In
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
+          </>
+        )}
+      </button>
+    </form>
+  );
+}
 
-    const handleSendCode = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email) return;
-        setLoading(true);
-        const success = await requestLoginCode(email);
-        setLoading(false);
-        // Always move to code step to allow user to resend if first attempt failed
-        setStep("code");
-        if (success) {
-            setResendCooldown(30);
-        }
-    };
+/* ── Sign-Up form ── */
+function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
+  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [shaking, setShaking] = useState(false);
 
-    const handleVerifyCode = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email || !code) return;
-        setLoading(true);
-        const success = await verifyLoginCode(email, code);
-        setLoading(false);
-        if (success) {
-            router.push("/dashboard");
-            onClose();
-        }
-    };
+  const triggerShake = () => {
+    setShaking(true);
+    setTimeout(() => setShaking(false), 500);
+  };
 
-    const handleResendCode = async () => {
-        if (!email || resendCooldown > 0) return;
-        setLoading(true);
-        const success = await requestLoginCode(email);
-        setLoading(false);
-        if (success) {
-            setResendCooldown(30);
-        }
-    };
+  const pwStrength = getStrength(formData.password);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      triggerShake();
+      return;
+    }
+    if (confirmPassword && confirmPassword !== formData.password) {
+      toast.error("Passwords do not match");
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDone(true);
+      } else {
+        toast.error(data.message);
+        triggerShake();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong. Please try again.");
+      triggerShake();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800/80 rounded-[2rem] p-8 sm:p-10 relative backdrop-blur-3xl shadow-2xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-zinc-800/20 rounded-full blur-[60px] -mr-10 -mt-10 pointer-events-none" />
-            
-            <button onClick={onClose} className="absolute top-5 right-5 p-2 text-zinc-500 hover:text-white transition-colors cursor-pointer bg-zinc-900/50 rounded-full hover:bg-zinc-800 z-10">
-              <X size={18} />
-            </button>
-            
-            <div className="mb-8">
-                <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center border border-zinc-800 mb-4 shadow-inner">
-                    <Lock size={20} className="text-white" />
-                </div>
-                <h2 className="text-3xl font-medium text-white font-playfair italic">{isAdminMode ? "Admin Portal" : "Member Access"}</h2>
-                <p className="text-zinc-500 text-sm mt-1 font-dm">Authenticate to enter the private network.</p>
-            </div>
-            
-            <div className="flex p-1 bg-zinc-900/80 rounded-xl mb-8 border border-zinc-800/50">
-                <button 
-                    onClick={() => setIsAdminMode(false)}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300 cursor-pointer ${!isAdminMode ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                    Member
-                </button>
-                <button 
-                    onClick={() => setIsAdminMode(true)}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300 cursor-pointer ${isAdminMode ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                    Admin
-                </button>
-            </div>
-
-            <form onSubmit={isAdminMode ? handleLogin : step === "email" ? handleSendCode : handleVerifyCode} className="space-y-4">
-                {isAdminMode ? (
-                    <>
-                        <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-                            <input 
-                                required
-                                className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm"
-                                placeholder="Admin Identification"
-                                value={adminId}
-                                onChange={e => setAdminId(e.target.value)}
-                            />
-                            <input 
-                                required
-                                type="password"
-                                className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm font-bold tracking-widest"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                            />
-                        </div>
-                    </>
-                ) : (
-                    <div className="animate-in slide-in-from-left-4 duration-300 space-y-4">
-                        <input 
-                            required
-                            type="email"
-                            className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-white/20 focus:bg-zinc-900 focus:ring-1 focus:ring-white/10 transition-all placeholder:text-zinc-700 font-dm"
-                            placeholder="access@member.com"
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            disabled={step === "code"}
-                        />
-                        {step === "code" && (
-                          <input
-                            required
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            maxLength={6}
-                            className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4 text-zinc-200 focus:outline-none focus:border-emerald-500/40 focus:bg-zinc-900 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-zinc-700 font-dm tracking-[0.4em] text-center"
-                            placeholder="••••••"
-                            value={code}
-                            onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                          />
-                        )}
-                        <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/50 flex items-start gap-3">
-                            <div className="h-5 w-5 rounded-full border border-zinc-700 flex items-center justify-center mt-0.5 shrink-0">
-                                <div className="h-2.5 w-2.5 bg-zinc-600 rounded-full"></div>
-                            </div>
-                            <p className="text-xs text-zinc-500 leading-relaxed font-dm">
-                                {step === "code"
-                                  ? "Enter the 6 digit code sent to your email. It expires in 10 minutes."
-                                  : "We will email a one-time verification code to log you in."}
-                            </p>
-                        </div>
-                    </div>
-                )}
-                 <button 
-                    disabled={loading}
-                    type="submit" 
-                    className="w-full bg-white text-black font-bold text-lg py-4 rounded-xl hover:bg-zinc-200 transition-all mt-6 flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
-                >
-                    {loading ? <Loader2 className="animate-spin" /> : isAdminMode ? "Establish Connection" : step === "email" ? "Send Code" : "Verify & Enter"}
-                </button>
-                {!isAdminMode && step === "code" && (
-                                    <div className="flex flex-col gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={handleResendCode}
-                                            disabled={loading || resendCooldown > 0}
-                                            className="w-full text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
-                                        >
-                                            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setStep("email")}
-                                            className="w-full text-xs text-zinc-400 hover:text-white transition-colors"
-                                        >
-                                            Change email address
-                                        </button>
-                                    </div>
-                )}
-            </form>
-          </div>
+      <div className="flex flex-col items-center text-center py-6 animate-in zoom-in-75 duration-500">
+        <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-5 border border-emerald-500/20 shadow-[0_0_32px_rgba(16,185,129,0.25)] animate-pulse">
+          <CheckCircle2 size={28} />
         </div>
+        <h3 className="text-2xl text-white font-playfair italic mb-2">Account Created!</h3>
+        <p className="text-zinc-400 text-sm leading-relaxed mb-6 max-w-xs">
+          Your account is ready. Sign in with your email to continue.
+        </p>
+        <button
+          onClick={onSuccess}
+          className="bg-white text-black px-8 py-2.5 rounded-full font-bold text-sm hover:bg-zinc-100 active:scale-95 transition-all shadow-lg cursor-pointer"
+        >
+          Go to Sign In
+        </button>
+      </div>
     );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className={`space-y-4 animate-in slide-in-from-right-3 duration-300 ${shaking ? "shake" : ""}`}>
+      {/* Name */}
+      <div>
+        <FloatingInput
+          label="Your Name"
+          value={formData.name}
+          onChange={(v) => setFormData({ ...formData, name: v })}
+          placeholder="John Doe"
+          autoComplete="name"
+          required
+        />
+        <div className="flex justify-between mt-1.5 px-0.5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Letters, numbers, spaces allowed</p>
+          <p className={`text-[10px] tabular-nums ${formData.name.length > 36 ? "text-orange-400" : "text-zinc-600"}`}>
+            {formData.name.length}/40
+          </p>
+        </div>
+      </div>
+
+      {/* Email */}
+      <FloatingInput
+        label="Email"
+        value={formData.email}
+        onChange={(v) => setFormData({ ...formData, email: v })}
+        type="email"
+        placeholder="you@example.com"
+        autoComplete="email"
+        required
+      />
+
+      {/* Password */}
+      <div>
+        <FloatingInput
+          label="Password"
+          value={formData.password}
+          onChange={(v) => setFormData({ ...formData, password: v })}
+          type={showPw ? "text" : "password"}
+          placeholder="Min. 8 characters"
+          autoComplete="new-password"
+          required
+          rightSlot={
+            <button type="button" onClick={() => setShowPw((v) => !v)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          }
+        />
+        {formData.password.length > 0 && (
+          <div className="mt-2 px-0.5 animate-in fade-in duration-200">
+            <div className="flex gap-1 mb-1">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="h-1 flex-1 rounded-full transition-all duration-300"
+                  style={{ backgroundColor: i <= pwStrength ? strengthColor[pwStrength] : "#27272a" }}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] uppercase tracking-widest" style={{ color: strengthColor[pwStrength] }}>
+              {strengthLabel[pwStrength]}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm Password */}
+      <div>
+        <FloatingInput
+          label="Confirm Password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          type={showConfirmPw ? "text" : "password"}
+          placeholder="Repeat your password"
+          autoComplete="new-password"
+          rightSlot={
+            <button type="button" onClick={() => setShowConfirmPw((v) => !v)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+              {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          }
+        />
+        {confirmPassword.length > 0 && (
+          <p className={`text-[10px] uppercase tracking-widest mt-1.5 px-0.5 animate-in fade-in duration-200 ${confirmPassword === formData.password ? "text-emerald-400" : "text-red-400"
+            }`}>
+            {confirmPassword === formData.password ? "✓ Passwords match" : "✗ Passwords don't match"}
+          </p>
+        )}
+      </div>
+
+      <button
+        disabled={loading}
+        type="submit"
+        className="w-full mt-2 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white font-bold py-3.5 rounded-xl hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.97] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_24px_rgba(16,185,129,0.25)] hover:shadow-[0_0_32px_rgba(16,185,129,0.4)] text-sm tracking-wide disabled:opacity-60 relative overflow-hidden group"
+      >
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out pointer-events-none" />
+        {loading ? (
+          <Loader2 className="animate-spin" size={18} />
+        ) : (
+          <>
+            Create Account
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
+          </>
+        )}
+      </button>
+
+      <p className="text-center text-[10px] text-zinc-600 uppercase tracking-widest pt-1">
+        Secure · Private · Encrypted
+      </p>
+    </form>
+  );
+}
+
+/* ── Combined Auth Modal ── */
+export function AuthModal({
+  onClose,
+  defaultTab = "signin",
+}: {
+  onClose: () => void;
+  defaultTab?: "signin" | "signup";
+}) {
+  const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="p-7 sm:p-9 relative z-10">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest">CALLU</span>
+        </div>
+
+        <h2 className="text-3xl font-medium text-white font-playfair italic mb-1">
+          {tab === "signin" ? "Welcome back." : "Join the network."}
+        </h2>
+        <p className="text-zinc-500 text-xs mb-7 font-dm leading-relaxed">
+          {tab === "signin"
+            ? "Sign in to enter your private space."
+            : "Create your account to get started."}
+        </p>
+
+        <TabBar tab={tab} setTab={setTab} />
+
+        {tab === "signin" ? (
+          <SignInForm onSuccess={onClose} />
+        ) : (
+          <SignUpForm onSuccess={() => setTab("signin")} />
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+export function LoginModal({ onClose }: { onClose: () => void }) {
+  return <AuthModal onClose={onClose} defaultTab="signin" />;
+}
+
+export default function ApplyModal({ onClose }: { onClose: () => void }) {
+  return <AuthModal onClose={onClose} defaultTab="signup" />;
 }
