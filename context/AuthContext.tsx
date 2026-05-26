@@ -8,6 +8,7 @@ interface User {
   _id: string;
   name: string;
   email: string;
+  mobile?: string;
 
   status: 'pending' | 'approved' | 'rejected';
   role: 'user' | 'admin';
