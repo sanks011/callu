@@ -1,49 +1,30 @@
 import mongoose from 'mongoose';
-import User from '@/models/User';
-import Room from '@/models/Room';
-import CallLog from '@/models/CallLog';
 
-/**
- * Global is used here to maintain a cached connection across hot reloads
- * in development. This prevents connections growing exponentially
- * during API Route usage.
- */
-let cached = (global as any).mongoose;
-
-if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null };
-}
+// These imports ensure models are registered when dbConnect is called
+import '@/models/User';
+import '@/models/Room';
+import '@/models/CallLog';
 
 async function dbConnect() {
-  if (cached.conn) {
-    return cached.conn;
-  }
-
   const MONGODB_URI = process.env.MONGODB_URI;
 
   if (!MONGODB_URI) {
-    throw new Error(
-      'Please define the MONGODB_URI environment variable'
-    );
+    throw new Error('Please define the MONGODB_URI environment variable');
   }
 
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      return mongoose;
-    });
-  }
-  try {
-    cached.conn = await cached.promise;
-  } catch (e) {
-    cached.promise = null;
-    throw e;
+  // Reuse an active connection
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
 
-  return cached.conn;
+  // Disconnect any stale/connecting/disconnecting state before reconnecting
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+
+  // Always connect using the URI from process.env — never from cache
+  await mongoose.connect(MONGODB_URI, { bufferCommands: false });
+  return mongoose.connection;
 }
 
 export default dbConnect;

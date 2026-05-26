@@ -9,14 +9,14 @@ const hashValue = (value: string) =>
 
 export async function POST(req: Request) {
   try {
-    const { token, name, email, mobile, avatarConfig } = await req.json();
+    const { token, name, email, avatarConfig } = await req.json();
 
     if (!token) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
     }
 
-    if (!name || !email || !mobile) {
-      return NextResponse.json({ message: "Name, email, and mobile are required" }, { status: 400 });
+    if (!name || !email) {
+      return NextResponse.json({ message: "Name and email are required" }, { status: 400 });
     }
 
     await dbConnect();
@@ -35,15 +35,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Email is already taken" }, { status: 400 });
     }
 
-    // Check if new mobile already exists for another user
-    const existingMobile = await User.findOne({ mobile, _id: { $ne: userId } });
-    if (existingMobile) {
-      return NextResponse.json({ message: "Mobile number is already registered" }, { status: 400 });
-    }
+
+
+    // Build update object
+    const updateFields: Record<string, unknown> = { name, email, avatarConfig };
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { name, email, mobile, avatarConfig },
+      { $set: updateFields },
       { new: true }
     );
 
