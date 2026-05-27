@@ -31,6 +31,19 @@ const UserSchema = new Schema({
     type: Object,
     default: {},
   },
+  mobile: {
+    type: String,
+    default: null,
+  },
+  // Keybinds — synced across desktop and web
+  pttKeycode: {
+    type: Number,
+    default: 29, // Left Ctrl
+  },
+  muteKeycode: {
+    type: Number,
+    default: 0, // 0 = not set
+  },
 }, { timestamps: true });
 
 const User = models.User || model('User', UserSchema);

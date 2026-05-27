@@ -24,6 +24,24 @@ async function dbConnect() {
 
   // Always connect using the URI from process.env — never from cache
   await mongoose.connect(MONGODB_URI, { bufferCommands: false });
+
+  // One-time migration: drop the unique mobile_1 index which breaks signup
+  // when mobile is null (E11000 duplicate key). Mobile is optional so should not be unique.
+  try {
+    const usersCollection = mongoose.connection.db?.collection("users");
+    if (usersCollection) {
+      const indexes = await usersCollection.indexes();
+      const hasMobileIndex = indexes.some((idx) => idx.name === "mobile_1");
+      if (hasMobileIndex) {
+        await usersCollection.dropIndex("mobile_1");
+        console.log("[DB] ✓ Dropped legacy unique mobile_1 index");
+      }
+    }
+  } catch (migrationErr: any) {
+    // Non-fatal — log and continue
+    console.warn("[DB] Could not drop mobile_1 index:", migrationErr?.message);
+  }
+
   return mongoose.connection;
 }
 

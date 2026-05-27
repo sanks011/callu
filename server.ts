@@ -57,6 +57,9 @@ connectDB().then(() => {
       }
     });
 
+    // Expose io globally so Next.js API routes can emit events
+    (globalThis as any).__socketio = io;
+
     // Store connected users (socketId -> userId)
     // In a real app, use Redis. For this MVP, in-memory is fine.
     const onlineUsers = new Map<string, string>(); // userId -> socketId

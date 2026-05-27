@@ -9,7 +9,7 @@ const hashValue = (value: string) =>
 
 export async function POST(req: Request) {
   try {
-    const { token, name, email, avatarConfig } = await req.json();
+    const { token, name, email, mobile, avatarConfig, pttKeycode, muteKeycode } = await req.json();
 
     if (!token) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
@@ -39,6 +39,9 @@ export async function POST(req: Request) {
 
     // Build update object
     const updateFields: Record<string, unknown> = { name, email, avatarConfig };
+    if (mobile !== undefined) updateFields.mobile = mobile;
+    if (pttKeycode !== undefined) updateFields.pttKeycode = pttKeycode;
+    if (muteKeycode !== undefined) updateFields.muteKeycode = muteKeycode;
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,

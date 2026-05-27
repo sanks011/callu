@@ -50,13 +50,24 @@ export async function POST(req: Request) {
 
     const passwordHash = await hashPassword(rawPassword);
 
-    await User.create({
+    const newUser = await User.create({
       name: rawName,
       email: rawEmail,
       passwordHash,
       status: "approved",
       role: "user",
     });
+
+    // Notify all connected clients that a new member joined
+    const io = (globalThis as any).__socketio;
+    if (io) {
+      io.emit("new-member", {
+        _id: newUser._id,
+        name: newUser.name,
+        avatarConfig: newUser.avatarConfig,
+        email: newUser.email,
+      });
+    }
 
     return NextResponse.json({ message: "Signup successful" }, { status: 201 });
   } catch (error: any) {
