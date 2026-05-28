@@ -1919,7 +1919,7 @@ export default function RoomVoiceChatPage() {
       {/* Edge trigger to open chat on hover */}
       {!isChatOpen && (
         <div 
-          className="fixed top-0 right-0 h-full w-4 z-[45] hidden sm:block" 
+          className="absolute top-0 right-0 h-full w-4 z-[45] hidden sm:block" 
           onMouseEnter={() => setIsChatOpen(true)}
         />
       )}
@@ -1932,7 +1932,7 @@ export default function RoomVoiceChatPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-[55] sm:hidden"
+              className="absolute inset-0 bg-black/40 z-[55] sm:hidden"
               onClick={() => setIsChatOpen(false)}
             />
             <motion.aside
@@ -1941,7 +1941,7 @@ export default function RoomVoiceChatPage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 480, opacity: 0 }}
               transition={{ type: "spring", stiffness: 260, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] sm:min-w-[280px] sm:max-w-[90vw] sm:resize-x sm:overflow-hidden bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 z-[60] flex flex-col min-h-0 shadow-2xl ring-1 ring-white/5"
+              className="absolute top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] sm:min-w-[280px] sm:max-w-[90vw] sm:resize-x sm:overflow-hidden bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 z-[60] flex flex-col min-h-0 shadow-2xl ring-1 ring-white/5"
             >
               <div className="px-5 py-4 border-b border-zinc-800/70 flex items-center justify-between bg-gradient-to-b from-zinc-950/90 to-transparent">
                 <div className="flex items-center gap-2.5">

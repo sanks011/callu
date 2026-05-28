@@ -89,7 +89,7 @@ const RoomVoiceContext = createContext<RoomVoiceContextType>({
   setPttKeycode: () => {},
   isRecordingKeybind: false,
   setIsRecordingKeybind: () => {},
-  muteKeycode: 0,
+  muteKeycode: 62,
   setMuteKeycode: () => {},
   isRecordingMuteKeybind: false,
   setIsRecordingMuteKeybind: () => {},
@@ -173,7 +173,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       const saved = localStorage.getItem("mute-keycode");
       if (saved) return parseInt(saved, 10);
     }
-    return 0;
+    return 62;
   });
   const [isRecordingMuteKeybind, setIsRecordingMuteKeybind] = useState(false);
 

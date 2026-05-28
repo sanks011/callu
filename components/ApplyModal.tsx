@@ -117,7 +117,7 @@ function FloatingInput({
 }
 
 /* ── Sign-In form ── */
-function SignInForm({ onSuccess }: { onSuccess: () => void }) {
+function SignInForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => void; redirectOnSuccess?: boolean }) {
   const { login } = useAuth();
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
@@ -137,9 +137,11 @@ function SignInForm({ onSuccess }: { onSuccess: () => void }) {
     const success = await login(identifier, password, false);
     setLoading(false);
     if (success) {
-      const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
-      if (stored.role === "admin") router.push("/admin");
-      else router.push("/dashboard");
+      if (redirectOnSuccess) {
+        const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
+        if (stored.role === "admin") router.push("/admin");
+        else router.push("/dashboard");
+      }
       onSuccess();
     } else {
       triggerShake();
@@ -191,7 +193,7 @@ function SignInForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 /* ── Sign-Up form ── */
-function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
+function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => void; redirectOnSuccess?: boolean }) {
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -377,9 +379,11 @@ function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
 export function AuthModal({
   onClose,
   defaultTab = "signin",
+  redirectOnSuccess = true,
 }: {
   onClose: () => void;
   defaultTab?: "signin" | "signup";
+  redirectOnSuccess?: boolean;
 }) {
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
 
@@ -395,7 +399,7 @@ export function AuthModal({
         </div>
 
         <h2 className="text-3xl font-medium text-white font-playfair italic mb-1">
-          {tab === "signin" ? "Welcome back." : "Join the network."}
+          {tab === "signin" ? "Welcome." : "Join the network."}
         </h2>
         <p className="text-zinc-500 text-xs mb-7 font-dm leading-relaxed">
           {tab === "signin"
@@ -406,19 +410,19 @@ export function AuthModal({
         <TabBar tab={tab} setTab={setTab} />
 
         {tab === "signin" ? (
-          <SignInForm onSuccess={onClose} />
+          <SignInForm onSuccess={onClose} redirectOnSuccess={redirectOnSuccess} />
         ) : (
-          <SignUpForm onSuccess={() => setTab("signin")} />
+          <SignUpForm onSuccess={() => setTab("signin")} redirectOnSuccess={redirectOnSuccess} />
         )}
       </div>
     </ModalShell>
   );
 }
 
-export function LoginModal({ onClose }: { onClose: () => void }) {
-  return <AuthModal onClose={onClose} defaultTab="signin" />;
+export function LoginModal({ onClose, redirectOnSuccess = true }: { onClose: () => void; redirectOnSuccess?: boolean }) {
+  return <AuthModal onClose={onClose} defaultTab="signin" redirectOnSuccess={redirectOnSuccess} />;
 }
 
-export default function ApplyModal({ onClose }: { onClose: () => void }) {
-  return <AuthModal onClose={onClose} defaultTab="signup" />;
+export default function ApplyModal({ onClose, redirectOnSuccess = true }: { onClose: () => void; redirectOnSuccess?: boolean }) {
+  return <AuthModal onClose={onClose} defaultTab="signup" redirectOnSuccess={redirectOnSuccess} />;
 }

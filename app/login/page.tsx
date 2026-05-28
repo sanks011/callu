@@ -7,6 +7,7 @@ import { ArrowRight, LogOut, CheckCircle2 } from "lucide-react";
 export default function DesktopLoginPage() {
   const { user, logout, isLoading } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
+  const [justLoggedIntoDesktop, setJustLoggedIntoDesktop] = useState(false);
 
   const handleContinue = () => {
     setRedirecting(true);
@@ -83,7 +84,7 @@ export default function DesktopLoginPage() {
     );
   }
 
-  if (user && user.status === 'approved') {
+  if (user && user.status === 'approved' && justLoggedIntoDesktop) {
     return (
       <main className="min-h-screen bg-black text-white relative flex flex-col items-center justify-center p-4 overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-900/10 rounded-full blur-[100px] pointer-events-none" />
@@ -106,7 +107,7 @@ export default function DesktopLoginPage() {
           </div>
           
           <h2 className="text-3xl font-medium text-white font-playfair italic mb-3">
-            Welcome back, {user.name}
+            Login Successful!
           </h2>
           <p className="text-zinc-400 text-sm mb-10 leading-relaxed px-4">
             You are securely signed in to Callu. Click below to return to the desktop app.
@@ -121,15 +122,6 @@ export default function DesktopLoginPage() {
               {redirecting ? "Redirecting..." : "Continue to Desktop App"}
               {!redirecting && <ArrowRight size={18} />}
             </button>
-            
-            <button
-              onClick={logout}
-              disabled={redirecting}
-              className="w-full bg-transparent border border-zinc-800 text-zinc-400 font-medium py-3.5 rounded-xl hover:bg-zinc-900 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-            >
-              <LogOut size={16} />
-              Not you? Switch Account
-            </button>
           </div>
         </div>
       </main>
@@ -138,7 +130,7 @@ export default function DesktopLoginPage() {
 
   return (
     <main className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col items-center justify-center">
-      <AuthModal onClose={() => {}} defaultTab="signin" />
+      <AuthModal onClose={() => setJustLoggedIntoDesktop(true)} defaultTab="signin" redirectOnSuccess={false} />
     </main>
   );
 }
