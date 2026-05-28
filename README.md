@@ -4,6 +4,31 @@
 
 ---
 
+## Repositories & Sync
+
+- **This repo (`sanks011/callu`)** is the **web + server** version.
+- **Desktop app (Electron)** lives at: https://github.com/Sahnik0/callu
+
+To keep both apps in sync, we recommend a shared root folder like:
+
+```
+Callu/
+├── callu/          # Web + server (this repo)
+└── callu-desktop/  # Electron app (Sahnik0/callu)
+```
+
+### Desktop app API URL
+
+In the Electron app, set:
+
+```
+VITE_API_URL=https://callu.up.railway.app
+```
+
+For local development, run this server locally and change `VITE_API_URL` to your local URL (for example `http://localhost:3000`).
+
+---
+
 ## Features
 
 - **Curated Access** — Applications are reviewed manually; fewer than 1% of applicants are accepted, ensuring a high-trust environment.
@@ -86,36 +111,21 @@
 
 ## Environment Variables
 
-Create a `.env` file at the root of the project with the following variables:
+Create a `.env` file at the root of the project (copy `.env.example`), with the following required variables:
 
 ```env
-# ── Server ───────────────────────────────────────────────────────────────────
-NODE_ENV=development
-PORT=3000
-
-# Public base URL (used for absolute links, e.g. in emails)
-NEXT_PUBLIC_URL=http://localhost:3000
-
-# ── MongoDB ───────────────────────────────────────────────────────────────────
-MONGODB_URI=mongodb://localhost:27017/callu
-
-# ── Admin Credentials ─────────────────────────────────────────────────────────
-ADMIN_ID=your_admin_id
-ADMIN_PASSWORD=your_admin_password
-
-# ── Email / OTP (Resend) ──────────────────────────────────────────────────────
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
-RESEND_FROM_EMAIL=noreply@yourdomain.com
-
-# Optional: receives a BCC copy of every OTP email (useful for auditing)
-OTP_BCC_EMAIL=audit@yourdomain.com
-
-# ── ImageKit (room chat file attachments) ─────────────────────────────────────
-IMAGEKIT_PUBLIC_KEY=public_xxxxxxxxxxxxxxxxxxxx
-IMAGEKIT_PRIVATE_KEY=private_xxxxxxxxxxxxxxxxxxxx
-IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/your_id
+IMAGEKIT_PRIVATE_KEY=
+IMAGEKIT_PUBLIC_KEY=
+IMAGEKIT_URL_ENDPOINT=
+MONGODB_URI=
+NEXT_PUBLIC_URL=https://callu.up.railway.app
+OTP_BCC_EMAIL=
+PORT=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 ```
 
+> **Note:** You can replace `NEXT_PUBLIC_URL` with your local URL (for example `http://localhost:3000`) for local development.  
 > **Note:** ImageKit variables are optional. If omitted, room chat file attachments and automatic cleanup of expired uploads are disabled.
 
 ---
@@ -167,6 +177,6 @@ The project ships with a `render.yaml` for one-click deployment on [Render](http
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or pull request for bug fixes, improvements, or new features. Make sure `npm run lint` passes before submitting.
+Contributions are welcome! For **large features**, please start a discussion first to gather feedback from maintainers and clarify scope before proceeding. For smaller fixes, open an issue or pull request directly. Make sure `npm run lint` passes before submitting.
 
 Pull requests should follow the template in `.github/pull_request_template.md`, include a `Fixes #<issue-number>` reference, and use a conventional PR title such as `fix: short summary`.
