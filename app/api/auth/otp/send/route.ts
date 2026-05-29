@@ -5,6 +5,7 @@ import User from "@/models/User";
 import LoginOtp from "@/models/LoginOtp";
 import { sendNotifyMail } from "@/lib/notifyMail";
 
+
 const hashValue = (value: string) =>
   crypto.createHash("sha256").update(value).digest("hex");
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     let body;
     try {
       body = await req.json();
-    } catch (parseError) {
+    } catch {
       console.error("[OTP] JSON parse error - empty or invalid body");
       return NextResponse.json({ message: "Invalid request body" }, { status: 400 });
     }
@@ -25,9 +26,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Email is required" }, { status: 400 });
     }
 
-    if (!email.includes("@") || !email.includes(".")) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ message: "Invalid email format" }, { status: 400 });
     }
+
+
 
     await dbConnect();
     const user = await User.findOne({ email });
@@ -39,29 +42,23 @@ export async function POST(req: Request) {
 
     if (user.status !== "approved") {
       console.warn(`[OTP] User not approved: ${email}, status: ${user.status}`);
-      return NextResponse.json({ message: "Your application is still pending review." }, { status: 403 });
+      return NextResponse.json(
+        { message: "Your application is still pending review." },
+        { status: 403 }
+      );
     }
 
     const code = makeCode();
     const codeHash = hashValue(code);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    console.log(`[OTP_SEND] Generated code for ${email}:`);
-    console.log(`[OTP_SEND]   Code value: "${code}" (type: ${typeof code}, length: ${code.length})`);
-    console.log(`[OTP_SEND]   Code hash: ${codeHash.substring(0, 32)}...`);
-    console.log(`[OTP_SEND]   Expires at: ${expiresAt.toISOString()}`);
+    console.log(`[OTP] Generated OTP for ${email}, expires at ${expiresAt.toISOString()}`);
 
-    const result = await LoginOtp.findOneAndUpdate(
+    await LoginOtp.findOneAndUpdate(
       { email },
       { codeHash, expiresAt },
       { upsert: true, new: true }
     );
-
-    console.log(`[OTP_SEND] OTP document saved to DB:`, {
-      email: result.email,
-      codeHashStored: result.codeHash.substring(0, 32) + "...",
-      expiresAt: result.expiresAt.toISOString(),
-    });
 
     const subject = "Your CALLU verification code";
     const text = `Your CALLU verification code is ${code}. It expires in 10 minutes.`;
@@ -70,103 +67,42 @@ export async function POST(req: Request) {
         <div style="max-width:520px;margin:0 auto;background:#18181b;border-radius:16px;padding:28px;border:1px solid #27272a;">
           <h1 style="margin:0 0 12px;font-size:22px;">CALLU verification</h1>
           <p style="margin:0 0 18px;color:#a1a1aa;">Use this code to sign in. It expires in 10 minutes.</p>
-          <div style="font-size:28px;font-weight:700;letter-spacing:6px;background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:14px;text-align:center;">
+          <div style="font-size:32px;font-weight:700;letter-spacing:8px;background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:16px;text-align:center;">
             ${code}
           </div>
-          <p style="margin:16px 0 0;color:#71717a;font-size:12px;">If you didn’t request this, you can ignore this email.</p>
+          <p style="margin:16px 0 0;color:#71717a;font-size:12px;">If you didn't request this, you can safely ignore this email.</p>
         </div>
       </div>
     `;
 
-    const otpBcc = process.env.OTP_BCC_EMAIL?.trim();
-    const shouldRedirectToBcc = Boolean(otpBcc);
-    const targetEmail = shouldRedirectToBcc ? otpBcc : email;
-    const bccForSend = shouldRedirectToBcc ? undefined : otpBcc;
-
-    const effectiveSubject = shouldRedirectToBcc
-      ? `[OTP for ${email}] ${subject}`
-      : subject;
-    const effectiveText = shouldRedirectToBcc
-      ? `Intended recipient: ${email}\n\n${text}`
-      : text;
-    const effectiveHtml = shouldRedirectToBcc
-      ? `
-          <div style="margin:0 0 12px;font-size:12px;color:#a1a1aa;">Intended recipient: <strong style="color:#e4e4e7;">${email}</strong></div>
-          ${html}
-        `
-      : html;
-    
-    console.log(`[OTP] BCC email configured: ${otpBcc ? "✓ Yes (" + otpBcc + ")" : "✗ No"}`);
-    console.log(`[OTP] Sending OTP to: ${targetEmail}`);
-    if (shouldRedirectToBcc) {
-      console.log(`[OTP] Redirect mode active. Intended recipient: ${email}`);
-    } else if (otpBcc) {
-      console.log(`[OTP] BCC recipient: ${otpBcc}`);
-    }
-
     try {
-      console.log(`[OTP] Attempting to send email to ${targetEmail} via Resend...`);
-      await sendNotifyMail({ to: targetEmail, bcc: bccForSend, subject: effectiveSubject, text: effectiveText, html: effectiveHtml });
-      console.log(`[OTP] ✅ Email sent successfully to ${targetEmail}`);
-      if (bccForSend) {
-        console.log(`[OTP] ✅ BCC copy also sent to ${bccForSend}`);
-      }
+      console.log(`[OTP] Sending OTP email to ${email} via SMTP...`);
+      await sendNotifyMail({ to: email, subject, text, html });
+      console.log(`[OTP] ✅ OTP email sent successfully to ${email}`);
       return NextResponse.json({ message: "Verification code sent" }, { status: 200 });
     } catch (emailError: any) {
       const errorMsg = emailError?.message || emailError?.toString() || "Unknown email error";
-      console.error(`[OTP] ❌ Email send FAILED for ${targetEmail}:`, {
-        error: errorMsg,
-        status: emailError?.status,
-        bccAttempt: bccForSend ? "Yes (" + bccForSend + ")" : "No",
-      });
-      
-      // Environment/config errors (4xx, auth)
+      console.error(`[OTP] ❌ Email send FAILED for ${email}:`, errorMsg);
+
       if (
         errorMsg.includes("not configured") ||
         errorMsg.includes("Missing") ||
-        errorMsg.includes("401") ||
-        errorMsg.includes("403") ||
-        errorMsg.includes("Unauthorized") ||
-        errorMsg.includes("Forbidden")
+        errorMsg.includes("EAUTH") ||
+        errorMsg.includes("535")
       ) {
         return NextResponse.json(
-          { 
-            message: "Email service configuration error. Contact admin.",
-            code: "CONFIG_ERROR"
-          },
+          { message: "Email service configuration error. Contact admin.", code: "CONFIG_ERROR" },
           { status: 500 }
         );
       }
 
-      // Sandbox/recipient not verified errors (temporary, can retry)
       if (
-        errorMsg.includes("not verified") ||
-        errorMsg.includes("sandboxed") ||
-        errorMsg.includes("not in your list") ||
-        errorMsg.includes("Invalid or missing")
-      ) {
-        console.warn(`[OTP] Sandbox/verification issue: ${errorMsg}`);
-        return NextResponse.json(
-          { 
-            message: "Email delivery temporarily unavailable. Try again soon.",
-            code: "SERVICE_UNAVAILABLE"
-          },
-          { status: 503 }
-        );
-      }
-
-      // Network/transient errors (5xx, timeouts, etc)
-      if (
-        errorMsg.includes("timeout") ||
         errorMsg.includes("ECONNREFUSED") ||
         errorMsg.includes("ETIMEDOUT") ||
-        errorMsg.includes("temporarily")
+        errorMsg.includes("timeout")
       ) {
         return NextResponse.json(
-          { 
-            message: "Email service temporarily unavailable. Please retry.",
-            code: "TRANSIENT_ERROR"
-          },
+          { message: "Email service temporarily unavailable. Please retry.", code: "TRANSIENT_ERROR" },
           { status: 503 }
         );
       }
@@ -176,11 +112,10 @@ export async function POST(req: Request) {
   } catch (error: any) {
     const errorMsg = error?.message || error?.toString() || "Failed to send code";
     console.error("[OTP] Fatal error:", errorMsg, error);
-    
     return NextResponse.json(
-      { 
+      {
         message: errorMsg,
-        debug: process.env.NODE_ENV === "development" ? error?.stack : undefined
+        debug: process.env.NODE_ENV === "development" ? error?.stack : undefined,
       },
       { status: 500 }
     );
