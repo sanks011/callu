@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { X, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -118,7 +118,7 @@ function FloatingInput({
 
 /* ── Sign-In form ── */
 function SignInForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => void; redirectOnSuccess?: boolean }) {
-  const { login } = useAuth();
+  const { login, verifyOtp } = useAuth();
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -126,28 +126,200 @@ function SignInForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
   const [loading, setLoading] = useState(false);
   const [shaking, setShaking] = useState(false);
 
+  // OTP step
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
   const triggerShake = () => {
     setShaking(true);
     setTimeout(() => setShaking(false), 500);
   };
 
+  // Countdown timer for resend
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const t = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCountdown]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const success = await login(identifier, password, false);
+    const result = await login(identifier, password, false);
     setLoading(false);
-    if (success) {
-      if (redirectOnSuccess) {
-        const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
-        if (stored.role === "admin") router.push("/admin");
-        else router.push("/dashboard");
-      }
-      onSuccess();
-    } else {
+
+    if (!result.success) {
       triggerShake();
+      return;
+    }
+
+    if (result.requiresOtp && result.email) {
+      setOtpEmail(result.email);
+      setStep("otp");
+      setResendCountdown(60);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+      return;
+    }
+
+    // Admin or direct session
+    if (redirectOnSuccess) {
+      const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
+      if (stored.role === "admin") router.push("/admin");
+      else router.push("/dashboard");
+    }
+    onSuccess();
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    const cleaned = value.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[index] = cleaned;
+    setOtp(next);
+    if (cleaned && index < 5) {
+      otpRefs.current[index + 1]?.focus();
     }
   };
 
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (text.length === 6) {
+      e.preventDefault();
+      setOtp(text.split(""));
+      otpRefs.current[5]?.focus();
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otp.join("");
+    if (code.length < 6) {
+      toast.error("Please enter the 6-digit code");
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    const success = await verifyOtp(otpEmail, code);
+    setLoading(false);
+
+    if (!success) {
+      setOtp(["", "", "", "", "", ""]);
+      otpRefs.current[0]?.focus();
+      triggerShake();
+      return;
+    }
+
+    if (redirectOnSuccess) {
+      const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
+      if (stored.role === "admin") router.push("/admin");
+      else router.push("/dashboard");
+    }
+    onSuccess();
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0) return;
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: otpEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("New code sent!");
+        setOtp(["", "", "", "", "", ""]);
+        setResendCountdown(60);
+        setTimeout(() => otpRefs.current[0]?.focus(), 50);
+      } else {
+        toast.error(data.message || "Failed to resend code");
+      }
+    } catch {
+      toast.error("Failed to resend code");
+    }
+  };
+
+  // ── OTP step UI ──
+  if (step === "otp") {
+    return (
+      <form onSubmit={handleOtpSubmit} className={`space-y-5 animate-in slide-in-from-right-3 duration-300 ${shaking ? "shake" : ""}`}>
+        <div className="text-center">
+          <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"/>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+          </div>
+          <p className="text-zinc-400 text-xs leading-relaxed">
+            We sent a 6-digit code to<br />
+            <span className="text-zinc-200 font-medium">{otpEmail}</span>
+          </p>
+        </div>
+
+        {/* OTP boxes */}
+        <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+          {otp.map((digit, i) => (
+            <input
+              key={i}
+              ref={(el) => { otpRefs.current[i] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(i, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(i, e)}
+              className="w-11 h-13 text-center text-lg font-bold bg-zinc-900/60 border border-zinc-800/80 rounded-xl text-zinc-200 focus:outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/15 focus:bg-zinc-900 transition-all duration-200 caret-transparent"
+              style={{ height: "52px" }}
+            />
+          ))}
+        </div>
+
+        <button
+          disabled={loading || otp.join("").length < 6}
+          type="submit"
+          className="w-full mt-2 bg-white text-black font-bold py-3.5 rounded-xl hover:bg-zinc-100 active:scale-[0.97] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_24px_rgba(255,255,255,0.08)] text-sm tracking-wide disabled:opacity-50 relative overflow-hidden group"
+        >
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out pointer-events-none" />
+          {loading ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : (
+            <>
+              Verify & Sign In
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
+            </>
+          )}
+        </button>
+
+        <div className="flex items-center justify-between text-xs text-zinc-600 pt-1">
+          <button
+            type="button"
+            onClick={() => { setStep("credentials"); setOtp(["", "", "", "", "", ""]); }}
+            className="hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            ← Change email
+          </button>
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={resendCountdown > 0}
+            className={`transition-colors cursor-pointer ${resendCountdown > 0 ? "text-zinc-700" : "hover:text-zinc-300"}`}
+          >
+            {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend code"}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  // ── Credentials step UI ──
   return (
     <form onSubmit={handleLogin} className={`space-y-4 animate-in slide-in-from-left-3 duration-300 ${shaking ? "shake" : ""}`}>
       <FloatingInput
@@ -183,7 +355,7 @@ function SignInForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
           <Loader2 className="animate-spin" size={18} />
         ) : (
           <>
-            Sign In
+            Continue
             <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
           </>
         )}
@@ -193,14 +365,29 @@ function SignInForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
 }
 
 /* ── Sign-Up form ── */
-function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => void; redirectOnSuccess?: boolean }) {
+function SignUpForm({
+  onSuccess,
+  redirectOnSuccess = true,
+  onOtpStepChange,
+}: {
+  onSuccess: () => void;
+  redirectOnSuccess?: boolean;
+  onOtpStepChange?: (isOtp: boolean) => void;
+}) {
+  const { verifyOtp } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
   const [shaking, setShaking] = useState(false);
+
+  // OTP step
+  const [step, setStep] = useState<"form" | "otp">("form");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const triggerShake = () => {
     setShaking(true);
@@ -208,6 +395,13 @@ function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
   };
 
   const pwStrength = getStrength(formData.password);
+
+  // Countdown for resend
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const t = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCountdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,13 +420,25 @@ function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }),
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setDone(true);
+      console.log("[Signup] Response:", res.status, data);
+      if (res.ok && data.requiresOtp) {
+        setStep("otp");
+        setResendCountdown(60);
+        onOtpStepChange?.(true);
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
+      } else if (res.ok && !data.requiresOtp) {
+        // Unexpected: server returned OK but no OTP flag — show error
+        toast.error("Unexpected server response. Please refresh and try again.");
+        triggerShake();
       } else {
-        toast.error(data.message);
+        toast.error(data.message || "Signup failed. Please try again.");
         triggerShake();
       }
     } catch (err) {
@@ -244,26 +450,165 @@ function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
     }
   };
 
-  if (done) {
+  const handleOtpChange = (index: number, value: string) => {
+    const cleaned = value.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[index] = cleaned;
+    setOtp(next);
+    if (cleaned && index < 5) otpRefs.current[index + 1]?.focus();
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (text.length === 6) {
+      e.preventDefault();
+      setOtp(text.split(""));
+      otpRefs.current[5]?.focus();
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otp.join("");
+    if (code.length < 6) {
+      toast.error("Please enter the 6-digit code");
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    const success = await verifyOtp(formData.email.toLowerCase().trim(), code);
+    setLoading(false);
+
+    if (!success) {
+      setOtp(["", "", "", "", "", ""]);
+      otpRefs.current[0]?.focus();
+      triggerShake();
+      return;
+    }
+
+    // Account created + logged in
+    if (redirectOnSuccess) {
+      const stored = JSON.parse(localStorage.getItem("callu_user") || "{}");
+      if (stored.role === "admin") router.push("/admin");
+      else router.push("/dashboard");
+    }
+    onSuccess();
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0) return;
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("New code sent!");
+        setOtp(["", "", "", "", "", ""]);
+        setResendCountdown(60);
+        setTimeout(() => otpRefs.current[0]?.focus(), 50);
+      } else {
+        toast.error(data.message || "Failed to resend code");
+      }
+    } catch {
+      toast.error("Failed to resend code");
+    }
+  };
+
+  // ── OTP step ──
+  if (step === "otp") {
     return (
-      <div className="flex flex-col items-center text-center py-6 animate-in zoom-in-75 duration-500">
-        <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-5 border border-emerald-500/20 shadow-[0_0_32px_rgba(16,185,129,0.25)] animate-pulse">
-          <CheckCircle2 size={28} />
+      <form
+        onSubmit={handleOtpSubmit}
+        className={`space-y-5 animate-in slide-in-from-right-3 duration-300 ${shaking ? "shake" : ""}`}
+      >
+        <div className="text-center">
+          <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"/>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+          </div>
+          <p className="text-zinc-400 text-xs leading-relaxed">
+            We sent a 6-digit code to<br />
+            <span className="text-zinc-200 font-medium">{formData.email}</span>
+          </p>
         </div>
-        <h3 className="text-2xl text-white font-playfair italic mb-2">Account Created!</h3>
-        <p className="text-zinc-400 text-sm leading-relaxed mb-6 max-w-xs">
-          Your account is ready. Sign in with your email to continue.
-        </p>
+
+        {/* OTP boxes */}
+        <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+          {otp.map((digit, i) => (
+            <input
+              key={i}
+              ref={(el) => { otpRefs.current[i] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(i, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(i, e)}
+              className="w-11 text-center text-lg font-bold bg-zinc-900/60 border border-zinc-800/80 rounded-xl text-zinc-200 focus:outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/15 focus:bg-zinc-900 transition-all duration-200 caret-transparent"
+              style={{ height: "52px" }}
+            />
+          ))}
+        </div>
+
         <button
-          onClick={onSuccess}
-          className="bg-white text-black px-8 py-2.5 rounded-full font-bold text-sm hover:bg-zinc-100 active:scale-95 transition-all shadow-lg cursor-pointer"
+          disabled={loading || otp.join("").length < 6}
+          type="submit"
+          className="w-full mt-2 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white font-bold py-3.5 rounded-xl hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.97] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_24px_rgba(16,185,129,0.25)] text-sm tracking-wide disabled:opacity-50 relative overflow-hidden group"
         >
-          Go to Sign In
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out pointer-events-none" />
+          {loading ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : (
+            <>
+              Verify & Create Account
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
+            </>
+          )}
         </button>
-      </div>
+
+        <div className="flex items-center justify-between text-xs text-zinc-600 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setStep("form");
+              setOtp(["", "", "", "", "", ""]);
+              onOtpStepChange?.(false);
+            }}
+            className="hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            ← Change email
+          </button>
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={resendCountdown > 0}
+            className={`transition-colors cursor-pointer ${
+              resendCountdown > 0 ? "text-zinc-700" : "hover:text-zinc-300"
+            }`}
+          >
+            {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend code"}
+          </button>
+        </div>
+      </form>
     );
   }
 
+  // ── Signup form ──
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 animate-in slide-in-from-right-3 duration-300 ${shaking ? "shake" : ""}`}>
       {/* Name */}
@@ -345,8 +690,11 @@ function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
           }
         />
         {confirmPassword.length > 0 && (
-          <p className={`text-[10px] uppercase tracking-widest mt-1.5 px-0.5 animate-in fade-in duration-200 ${confirmPassword === formData.password ? "text-emerald-400" : "text-red-400"
-            }`}>
+          <p
+            className={`text-[10px] uppercase tracking-widest mt-1.5 px-0.5 animate-in fade-in duration-200 ${
+              confirmPassword === formData.password ? "text-emerald-400" : "text-red-400"
+            }`}
+          >
             {confirmPassword === formData.password ? "✓ Passwords match" : "✗ Passwords don't match"}
           </p>
         )}
@@ -362,7 +710,7 @@ function SignUpForm({ onSuccess, redirectOnSuccess = true }: { onSuccess: () => 
           <Loader2 className="animate-spin" size={18} />
         ) : (
           <>
-            Create Account
+            Continue
             <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-200" />
           </>
         )}
@@ -386,6 +734,15 @@ export function AuthModal({
   redirectOnSuccess?: boolean;
 }) {
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
+  const [signupInOtpStep, setSignupInOtpStep] = useState(false);
+
+  const subtitle = tab === "signin"
+    ? "Sign in to enter your private space."
+    : signupInOtpStep
+      ? "Check your inbox for the verification code."
+      : "Create your account to get started.";
+
+  const title = tab === "signin" ? "Welcome." : signupInOtpStep ? "Verify email." : "Join the network.";
 
   return (
     <ModalShell onClose={onClose}>
@@ -399,20 +756,23 @@ export function AuthModal({
         </div>
 
         <h2 className="text-3xl font-medium text-white font-playfair italic mb-1">
-          {tab === "signin" ? "Welcome." : "Join the network."}
+          {title}
         </h2>
         <p className="text-zinc-500 text-xs mb-7 font-dm leading-relaxed">
-          {tab === "signin"
-            ? "Sign in to enter your private space."
-            : "Create your account to get started."}
+          {subtitle}
         </p>
 
-        <TabBar tab={tab} setTab={setTab} />
+        {/* Hide tab bar during signup OTP step */}
+        {!signupInOtpStep && <TabBar tab={tab} setTab={setTab} />}
 
         {tab === "signin" ? (
           <SignInForm onSuccess={onClose} redirectOnSuccess={redirectOnSuccess} />
         ) : (
-          <SignUpForm onSuccess={() => setTab("signin")} redirectOnSuccess={redirectOnSuccess} />
+          <SignUpForm
+            onSuccess={onClose}
+            redirectOnSuccess={redirectOnSuccess}
+            onOtpStepChange={setSignupInOtpStep}
+          />
         )}
       </div>
     </ModalShell>

@@ -18,9 +18,16 @@ interface User {
   };
 }
 
+interface LoginResult {
+  success: boolean;
+  requiresOtp?: boolean;
+  email?: string;
+}
+
 interface AuthContextType {
   user: User | null;
-  login: (identifier: string, password: string, isAdmin?: boolean) => Promise<boolean>;
+  login: (identifier: string, password: string, isAdmin?: boolean) => Promise<LoginResult>;
+  verifyOtp: (email: string, code: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
   updateUser: (userData: User) => void;
@@ -28,7 +35,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  login: async () => false,
+  login: async () => ({ success: false }),
+  verifyOtp: async () => false,
   logout: () => {},
   isLoading: true,
   updateUser: () => {},
@@ -110,7 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void init();
   }, []);
 
-  const login = async (identifier: string, password: string, isAdmin?: boolean) => {
+  const login = async (identifier: string, password: string, isAdmin?: boolean): Promise<LoginResult> => {
     try {
       const body = isAdmin
         ? { adminId: identifier, password }
@@ -122,8 +130,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify(body),
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message);
+        return { success: false };
+      }
+
+      // Admin login — session returned directly (no OTP)
+      if (data.user && data.user.role === "admin") {
+        setUser(data.user);
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        return { success: true };
+      }
+
+      // Regular user — OTP required
+      if (data.requiresOtp) {
+        return { success: true, requiresOtp: true, email: data.email };
+      }
+
+      // Fallback: session returned directly
+      if (data.user) {
         setUser(data.user);
         localStorage.setItem(USER_KEY, JSON.stringify(data.user));
         if (data.sessionToken && data.expiresAt) {
@@ -132,14 +159,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             JSON.stringify({ token: data.sessionToken, expiresAt: data.expiresAt })
           );
         }
-        return true;
-      } else {
-        const error = await res.json();
-        toast.error(error.message);
-        return false;
+        return { success: true };
       }
+
+      toast.error("Unexpected response from server.");
+      return { success: false };
     } catch (e) {
       console.error(e);
+      return { success: false };
+    }
+  };
+
+  const verifyOtp = async (email: string, code: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Invalid verification code");
+        return false;
+      }
+
+      setUser(data.user);
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      if (data.sessionToken && data.expiresAt) {
+        localStorage.setItem(
+          SESSION_KEY,
+          JSON.stringify({ token: data.sessionToken, expiresAt: data.expiresAt })
+        );
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast.error("Something went wrong. Please try again.");
       return false;
     }
   };
@@ -157,7 +214,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, updateUser }}>
+    <AuthContext.Provider value={{ user, login, verifyOtp, logout, isLoading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
