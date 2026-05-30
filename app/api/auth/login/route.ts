@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     await LoginOtp.findOneAndUpdate(
       { email: normalizedId },
       { codeHash, expiresAt },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     console.log(`[Login] OTP generated for ${normalizedId}, expires at ${expiresAt.toISOString()}`);

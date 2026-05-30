@@ -33,7 +33,7 @@ export async function PATCH(req: Request) {
     const updatedUser = await User.findByIdAndUpdate(
       session.userId,
       { $set: updateFields },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return NextResponse.json({ user: updatedUser }, { status: 200 });

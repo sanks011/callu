@@ -5,6 +5,7 @@ import User from "@/models/User";
 import LoginOtp from "@/models/LoginOtp";
 import { hashPassword } from "@/lib/password";
 import { sendNotifyMail } from "@/lib/notifyMail";
+import { isDisposableEmail } from "@/lib/emailGuard";
 
 const NAME_REGEX = /^[A-Za-z0-9 @_-]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -54,6 +55,18 @@ export async function POST(req: Request) {
       );
     }
 
+    // ── Temp / disposable email guard ─────────────────────────────────────────
+    const emailGuard = await isDisposableEmail(rawEmail);
+    if (emailGuard.blocked) {
+      console.log(`[Signup] ⛔ Blocked disposable email: ${rawEmail} — ${emailGuard.reason}`);
+      return NextResponse.json(
+        {
+          message:
+            "Temporary or disposable email addresses are not allowed. Please sign up with a real email address.",
+        },
+        { status: 400 }
+      );
+    }
 
     if (rawPassword.length < 8) {
       return NextResponse.json(
@@ -86,7 +99,7 @@ export async function POST(req: Request) {
         purpose: "signup",
         pendingUser: { name: rawName, passwordHash },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     console.log(`[Signup] OTP generated for pending user: ${rawEmail}`);
