@@ -14,7 +14,7 @@ export async function PATCH(req: Request) {
     const updatedUser = await User.findByIdAndUpdate(
       id,
       { status },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return NextResponse.json({ user: updatedUser }, { status: 200 });

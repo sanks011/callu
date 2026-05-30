@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateFields },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!updatedUser) {

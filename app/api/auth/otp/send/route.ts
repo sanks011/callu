@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     await LoginOtp.findOneAndUpdate(
       { email },
       { codeHash, expiresAt },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     const subject = "Your CALLU verification code";
