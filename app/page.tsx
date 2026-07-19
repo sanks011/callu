@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
-import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity, Star, Globe, ChevronRight } from "lucide-react";
+import { Twitter, Linkedin, Github, Mail, Activity, Star, Globe } from "lucide-react";
 import { Footer } from "@/components/ui/modem-animated-footer";
 import DownloadButton from "@/components/DownloadButton";
+import FeatureGrid from "@/components/FeatureGrid";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
@@ -179,111 +180,7 @@ export default function Home() {
 
       </div>
 
-      {/* Aesthetic Bento Grid */}
-      <div className="relative z-10 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-12 gap-6 mt-10 mb-40 text-left">
-          
-          {/* Card 1: Large (Spans 7 cols) */}
-          <div className="md:col-span-7 group relative p-8 md:p-10 rounded-[2rem] bg-zinc-900/20 border border-white/5 hover:border-emerald-500/30 overflow-hidden transition-all duration-500 hover:bg-zinc-900/40 backdrop-blur-md shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] -mr-20 -mt-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-            
-            {/* Background Art */}
-            <div className="absolute -right-6 -bottom-10 md:right-4 md:-bottom-12 select-none pointer-events-none opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-700">
-              <span className="text-[12rem] font-black tracking-tighter">1%</span>
-            </div>
-
-            <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/30 transition-all duration-300 shadow-lg">
-                <Lock className="text-zinc-400 group-hover:text-emerald-400 transition-colors" size={20} />
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-bold text-white mb-3 tracking-tight">Exclusive Access</h3>
-                <p className="text-zinc-400 font-light leading-relaxed max-w-sm text-base md:text-lg">
-                  Manual curation ensures a high-trust environment. We accept less than 1% of applicants, preserving the quality of every interaction.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Small (Spans 5 cols) */}
-          <div className="md:col-span-5 group relative p-8 md:p-10 rounded-[2rem] bg-zinc-900/20 border border-white/5 hover:border-emerald-500/30 overflow-hidden transition-all duration-500 hover:bg-zinc-900/40 backdrop-blur-md shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]">
-            <div className="absolute bottom-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -mr-20 -mb-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-            
-            {/* Radar Animation Art */}
-            <div className="absolute top-1/2 right-10 -translate-y-1/2 w-32 h-32 opacity-10 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none">
-               <div className="absolute inset-0 rounded-full border border-emerald-500/30 animate-[ping_3s_ease-out_infinite]" />
-               <div className="absolute inset-4 rounded-full border border-emerald-500/40 animate-[ping_3s_ease-out_infinite_1s]" />
-               <div className="absolute inset-8 rounded-full border border-emerald-500/50 animate-[ping_3s_ease-out_infinite_2s]" />
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
-            </div>
-
-            <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/30 transition-all duration-300 shadow-lg">
-                <Zap className="text-zinc-400 group-hover:text-emerald-400 transition-colors" size={20} />
-              </div>
-              <div className="max-w-[12rem]">
-                <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">Instant Connect</h3>
-                <p className="text-zinc-400 font-light leading-relaxed text-sm">
-                  See who's online and jump right into serendipitous conversations effortlessly.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Small (Spans 5 cols) */}
-          <div className="md:col-span-5 group relative p-8 md:p-10 rounded-[2rem] bg-zinc-900/20 border border-white/5 hover:border-emerald-500/30 overflow-hidden transition-all duration-500 hover:bg-zinc-900/40 backdrop-blur-md shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]">
-            <div className="absolute top-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -ml-20 -mt-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-            
-            {/* Encryption Art */}
-            <div className="absolute inset-y-0 right-0 w-2/3 overflow-hidden opacity-0 group-hover:opacity-100 transition-all duration-700 pointer-events-none [mask-image:linear-gradient(to_left,black,transparent)]">
-              <div className="absolute top-10 right-10 flex items-center gap-2 text-emerald-500/40 font-mono text-[10px] translate-x-4 group-hover:-translate-x-0 transition-transform duration-1000">
-                <span>0x8F92</span> <div className="w-12 h-px bg-emerald-500/20" /> <Shield size={10} />
-              </div>
-              <div className="absolute top-24 right-4 flex items-center gap-2 text-emerald-500/40 font-mono text-[10px] translate-x-4 group-hover:-translate-x-0 transition-transform duration-1000 delay-150">
-                <span>0x2A1C</span> <div className="w-8 h-px bg-emerald-500/20" /> <Shield size={10} />
-              </div>
-              <div className="absolute bottom-16 right-12 flex items-center gap-2 text-emerald-500/40 font-mono text-[10px] translate-x-4 group-hover:-translate-x-0 transition-transform duration-1000 delay-300">
-                <span>0x9B4E</span> <div className="w-16 h-px bg-emerald-500/20" /> <Shield size={10} />
-              </div>
-            </div>
-
-            <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/30 transition-all duration-300 shadow-lg">
-                <Shield className="text-zinc-400 group-hover:text-emerald-400 transition-colors" size={20} />
-              </div>
-              <div className="max-w-[12rem]">
-                <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">Private by Design</h3>
-                <p className="text-zinc-400 font-light leading-relaxed text-sm">
-                  Your data is yours. Experience end-to-end encrypted signals and complete privacy.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Large (Spans 7 cols) */}
-          <div className="md:col-span-7 group relative p-8 md:p-10 rounded-[2rem] bg-zinc-900/20 border border-white/5 hover:border-emerald-500/30 overflow-hidden transition-all duration-500 hover:bg-zinc-900/40 backdrop-blur-md shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]">
-             <div className="absolute bottom-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] -mr-20 -mb-20 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-            
-            {/* Audio Waveform Art */}
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 flex items-center gap-[3px] opacity-10 group-hover:opacity-50 transition-opacity duration-500 pointer-events-none">
-              {[4, 8, 12, 16, 10, 6, 14, 18, 12, 8].map((h, i) => (
-                <div key={i} className={`w-1.5 bg-emerald-400 rounded-full transition-all duration-300 group-hover:animate-[pulse_1s_ease-in-out_infinite]`} style={{ height: `${h * 4}px`, animationDelay: `${i * 0.1}s` }} />
-              ))}
-            </div>
-
-            <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/30 transition-all duration-300 shadow-lg">
-                <Mic className="text-zinc-400 group-hover:text-emerald-400 transition-colors" size={20} />
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-bold text-white mb-3 tracking-tight">Crystal Clear Audio</h3>
-                <p className="text-zinc-400 font-light leading-relaxed max-w-sm text-base md:text-lg">
-                  Experience high-fidelity, lag-free voice conversations that feel natural. Like you're in the same room.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-      </div>
+      <FeatureGrid />
 
       <div className="w-full relative z-10">
         <Footer

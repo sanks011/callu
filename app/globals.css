@@ -156,3 +156,46 @@ html.lenis, html.lenis body { height: auto; }
 .animate-sweep {
   animation: sweep 1s ease-in-out;
 }
+
+@keyframes feature-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes feature-signal {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes feature-wave {
+  0%, 100% { transform: scaleY(0.72); }
+  50% { transform: scaleY(1); }
+}
+
+.feature-orbit {
+  animation: feature-orbit 18s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.feature-signal {
+  animation: feature-signal 3.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.feature-wave {
+  animation: feature-wave 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card,
+  .feature-orbit,
+  .feature-signal,
+  .feature-wave {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
